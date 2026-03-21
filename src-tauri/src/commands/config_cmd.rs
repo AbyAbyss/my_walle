@@ -60,6 +60,39 @@ pub fn save_llm_settings(app: AppHandle, settings: SaveLlmSettingsPayload) -> Re
     config::write_config_json(&app, &v)
 }
 
+#[derive(Deserialize)]
+pub struct SaveUiPreferencesPayload {
+    #[serde(default)]
+    pub onboarding_complete: Option<bool>,
+    #[serde(default)]
+    pub last_open_date: Option<String>,
+    #[serde(default)]
+    pub user_level: Option<String>,
+    #[serde(default)]
+    pub idle_wander: Option<bool>,
+}
+
+#[tauri::command]
+pub fn save_ui_preferences(app: AppHandle, prefs: SaveUiPreferencesPayload) -> Result<(), String> {
+    let mut v = config::read_config_json(&app)?;
+    if let Some(x) = prefs.onboarding_complete {
+        v["onboarding_complete"] = json!(x);
+    }
+    if let Some(ref s) = prefs.last_open_date {
+        v["last_open_date"] = json!(s);
+    }
+    if let Some(ref s) = prefs.user_level {
+        v["user_level"] = json!(s);
+    }
+    if let Some(x) = prefs.idle_wander {
+        if !v["mascot"].is_object() {
+            v["mascot"] = json!({});
+        }
+        v["mascot"]["idle_wander"] = json!(x);
+    }
+    config::write_config_json(&app, &v)
+}
+
 #[tauri::command]
 pub fn save_workflow_to_config(app: AppHandle, workflow: serde_json::Value) -> Result<(), String> {
     let name = workflow

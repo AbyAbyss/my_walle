@@ -1,0 +1,398 @@
+/* Overlay animation classes — loaded after emotion rules in globals.css */
+
+/* ── DANCE ───────────────────────────────────────────── */
+@keyframes walle-dance-body {
+  0% {
+    transform: translateY(0) rotate(0deg);
+  }
+  15% {
+    transform: translateY(-14px) rotate(-8deg);
+  }
+  30% {
+    transform: translateY(-10px) rotate(8deg);
+  }
+  45% {
+    transform: translateY(-16px) rotate(-6deg);
+  }
+  60% {
+    transform: translateY(-8px) rotate(6deg);
+  }
+  80% {
+    transform: translateY(-4px) rotate(0deg);
+  }
+  100% {
+    transform: translateY(0) rotate(0deg);
+  }
+}
+
+@keyframes walle-dance-arm-l {
+  0%,
+  100% {
+    transform: rotate(0deg);
+  }
+  25% {
+    transform: rotate(-60deg);
+  }
+  75% {
+    transform: rotate(40deg);
+  }
+}
+
+@keyframes walle-dance-arm-r {
+  0%,
+  100% {
+    transform: rotate(0deg);
+  }
+  25% {
+    transform: rotate(60deg);
+  }
+  75% {
+    transform: rotate(-40deg);
+  }
+}
+
+@keyframes walle-particle {
+  0% {
+    opacity: 1;
+    transform: translate(0, 0) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(var(--dx), var(--dy)) scale(0.3);
+  }
+}
+
+#walle.dance #body {
+  animation: walle-dance-body 1.2s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+#walle.dance #arm-left {
+  animation: walle-dance-arm-l 1.2s ease-in-out forwards;
+  transform-origin: 28px 110px;
+}
+
+#walle.dance #arm-right {
+  animation: walle-dance-arm-r 1.2s ease-in-out forwards;
+  transform-origin: 132px 110px;
+}
+
+#walle.dance #particles {
+  opacity: 1;
+}
+
+#walle.dance #p1 {
+  --dx: -30px;
+  --dy: -40px;
+  animation: walle-particle 0.8s ease-out 0.1s forwards;
+}
+
+#walle.dance #p2 {
+  --dx: 30px;
+  --dy: -45px;
+  animation: walle-particle 0.8s ease-out 0.2s forwards;
+}
+
+#walle.dance #p3 {
+  --dx: -20px;
+  --dy: -50px;
+  animation: walle-particle 0.8s ease-out 0s forwards;
+}
+
+#walle.dance #p4 {
+  --dx: 20px;
+  --dy: -35px;
+  animation: walle-particle 0.8s ease-out 0.3s forwards;
+}
+
+#walle.dance #p5 {
+  --dx: -40px;
+  --dy: -30px;
+  animation: walle-particle 0.8s ease-out 0.15s forwards;
+}
+
+#walle.dance #p6 {
+  --dx: 40px;
+  --dy: -28px;
+  animation: walle-particle 0.8s ease-out 0.25s forwards;
+}
+
+/* ── WAVE ────────────────────────────────────────────── */
+@keyframes walle-wave-arm {
+  0%,
+  100% {
+    transform: rotate(0deg);
+  }
+  20% {
+    transform: rotate(-70deg);
+  }
+  40% {
+    transform: rotate(-50deg);
+  }
+  60% {
+    transform: rotate(-70deg);
+  }
+  80% {
+    transform: rotate(-55deg);
+  }
+}
+
+#walle.wave #arm-right {
+  animation: walle-wave-arm 1s ease-in-out forwards;
+  transform-origin: 132px 110px;
+}
+
+/* ── THUMBS UP ───────────────────────────────────────── */
+@keyframes walle-thumb-arm {
+  0% {
+    transform: rotate(0deg) translateY(0);
+  }
+  30% {
+    transform: rotate(-80deg) translateY(-8px);
+  }
+  70% {
+    transform: rotate(-80deg) translateY(-8px);
+  }
+  100% {
+    transform: rotate(0deg) translateY(0);
+  }
+}
+
+@keyframes walle-thumb-show {
+  0%,
+  20% {
+    opacity: 0;
+  }
+  30%,
+  70% {
+    opacity: 1;
+  }
+  80%,
+  100% {
+    opacity: 0;
+  }
+}
+
+#walle.thumbs_up #arm-right {
+  animation: walle-thumb-arm 1s ease-in-out forwards;
+  transform-origin: 132px 110px;
+}
+
+#walle.thumbs_up #thumb {
+  animation: walle-thumb-show 1s ease-in-out forwards;
+}
+
+/* ── CONFUSED ────────────────────────────────────────── */
+@keyframes walle-confused-head {
+  0%,
+  100% {
+    transform: rotate(0deg);
+  }
+  25% {
+    transform: rotate(-12deg);
+  }
+  50% {
+    transform: rotate(8deg);
+  }
+  75% {
+    transform: rotate(-10deg);
+  }
+}
+
+@keyframes walle-qmark {
+  0%,
+  100% {
+    opacity: 0;
+    transform: scale(0.5) translateY(4px);
+  }
+  20%,
+  80% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+#walle.confused #head {
+  animation: walle-confused-head 1s ease-in-out forwards;
+  transform-origin: 80px 52px;
+}
+
+#walle.confused #question-bubble {
+  animation: walle-qmark 1s ease-out forwards;
+}
+
+#walle.confused #eye-l {
+  transform-origin: 57px 45px;
+  transform: scaleY(0.7) translateY(2px);
+}
+
+#walle.confused #eye-r {
+  transform-origin: 103px 45px;
+  transform: scaleY(1.1) translateY(-1px);
+}
+
+/* ── EXCITED RUN ─────────────────────────────────────── */
+@keyframes walle-run-tread {
+  from {
+    stroke-dashoffset: 0;
+  }
+  to {
+    stroke-dashoffset: -40;
+  }
+}
+
+@keyframes walle-run-lean {
+  0%,
+  100% {
+    transform: rotate(0deg) translateX(0);
+  }
+  50% {
+    transform: rotate(6deg) translateX(3px);
+  }
+}
+
+#walle.excited_run #body {
+  animation: walle-run-lean 0.3s ease-in-out infinite;
+  transform-origin: 80px 130px;
+}
+
+#walle.excited_run #tread {
+  stroke-dasharray: 8 4;
+  animation: walle-run-tread 0.2s linear infinite;
+}
+
+/* ── STRETCH (wake from sleep) ───────────────────────── */
+@keyframes walle-stretch-l {
+  0% {
+    transform: rotate(0deg);
+    opacity: 0;
+  }
+  20% {
+    opacity: 1;
+  }
+  50% {
+    transform: rotate(-120deg);
+  }
+  80% {
+    transform: rotate(-100deg);
+  }
+  100% {
+    transform: rotate(0deg);
+    opacity: 0;
+  }
+}
+
+@keyframes walle-stretch-r {
+  0% {
+    transform: rotate(0deg);
+    opacity: 0;
+  }
+  20% {
+    opacity: 1;
+  }
+  50% {
+    transform: rotate(120deg);
+  }
+  80% {
+    transform: rotate(100deg);
+  }
+  100% {
+    transform: rotate(0deg);
+    opacity: 0;
+  }
+}
+
+@keyframes walle-stretch-body {
+  0%,
+  100% {
+    transform: scaleY(1);
+  }
+  40% {
+    transform: scaleY(1.08);
+  }
+}
+
+#walle.stretch #arms-stretch {
+  opacity: 1;
+}
+
+#walle.stretch #arm-stretch-left {
+  animation: walle-stretch-l 1.2s ease-in-out forwards;
+  transform-origin: 28px 74px;
+}
+
+#walle.stretch #arm-stretch-right {
+  animation: walle-stretch-r 1.2s ease-in-out forwards;
+  transform-origin: 148px 74px;
+}
+
+#walle.stretch #body {
+  animation: walle-stretch-body 1.2s ease-in-out forwards;
+  transform-origin: 80px 130px;
+}
+
+/* ── PET ───────────────────────────────────────── */
+@keyframes walle-pet-eyes {
+  0%,
+  100% {
+    transform: scaleY(1);
+  }
+  30%,
+  70% {
+    transform: scaleY(0.15);
+  }
+}
+
+@keyframes walle-pet-body {
+  0% {
+    transform: scale(1);
+  }
+  20% {
+    transform: scale(1.08);
+  }
+  40% {
+    transform: scale(0.96);
+  }
+  60% {
+    transform: scale(1.04);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+#walle.pet #eye-l {
+  animation: walle-pet-eyes 0.8s ease-in-out forwards;
+  transform-origin: 57px 45px;
+}
+
+#walle.pet #eye-r {
+  animation: walle-pet-eyes 0.8s ease-in-out forwards;
+  transform-origin: 103px 45px;
+}
+
+#walle.pet #body {
+  animation: walle-pet-body 0.8s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+  transform-origin: 80px 130px;
+}
+
+#walle.pet #particles {
+  opacity: 1;
+}
+
+#walle.pet #p1 {
+  --dx: -15px;
+  --dy: -20px;
+  animation: walle-particle 0.6s ease-out 0s forwards;
+}
+
+#walle.pet #p2 {
+  --dx: 15px;
+  --dy: -22px;
+  animation: walle-particle 0.6s ease-out 0.1s forwards;
+}
+
+#walle.pet #p3 {
+  --dx: -10px;
+  --dy: -25px;
+  animation: walle-particle 0.6s ease-out 0.05s forwards;
+}

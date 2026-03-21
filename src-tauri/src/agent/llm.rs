@@ -177,6 +177,8 @@ To save a workflow, use plugin "save_workflow".
 To run a saved workflow, use plugin "run_workflow".
 Example trigger phrases: "save this as X", "run X", "start X"
 
+When the user asks to run a workflow, return run_workflow in actions. Do not claim a workflow is "already running", "in progress", or "must wait" — the app runs it immediately or reports an error. Never describe blocking/wait states unless the user sees a concrete error.
+
 Respond ONLY with valid JSON - no markdown, no explanation:
 {{
   "message": "string (max 2 sentences)",

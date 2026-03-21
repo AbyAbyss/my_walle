@@ -1,23 +1,51 @@
 import { listen } from "@tauri-apps/api/event";
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import ReactDOM from "react-dom/client";
 import EmotionEngine from "./components/Mascot/EmotionEngine";
 import MascotWindow from "./windows/MascotWindow";
+import type { Animation } from "./lib/animation";
+import { normalizeAnimation } from "./lib/animation";
 import { EMOTIONS, type Emotion } from "./lib/emotion";
 import "./styles/globals.css";
+import "./styles/animations.css";
 
 function MascotRoot() {
   const [emotion, setEmotion] = useState<Emotion>("idle");
+  const [animation, setAnimation] = useState<Animation>("none");
+  const prevEmotionRef = useRef<Emotion>("idle");
 
   useEffect(() => {
-    let unlisten: (() => void) | undefined;
+    let unlistenEmotion: (() => void) | undefined;
+    let unlistenAnimation: (() => void) | undefined;
     (async () => {
-      unlisten = await listen<{ emotion: Emotion }>("walle/emotion", (ev) => {
+      unlistenEmotion = await listen<{ emotion: Emotion }>("walle/emotion", (ev) => {
         if (ev.payload?.emotion) setEmotion(ev.payload.emotion);
       });
+      unlistenAnimation = await listen<{ animation: string }>("walle/animation", (ev) => {
+        setAnimation(normalizeAnimation(ev.payload?.animation));
+      });
     })().catch(console.error);
-    return () => unlisten?.();
+    return () => {
+      unlistenEmotion?.();
+      unlistenAnimation?.();
+    };
   }, []);
+
+  useEffect(() => {
+    if (prevEmotionRef.current === "sleeping" && emotion !== "sleeping") {
+      setAnimation("stretch");
+    }
+    prevEmotionRef.current = emotion;
+  }, [emotion]);
+
+  const onAnimationComplete = useCallback(() => {
+    setAnimation("none");
+  }, []);
+
+  const handlePet = useCallback(() => {
+    if (animation === "dance" || animation === "confused") return;
+    setAnimation("pet");
+  }, [animation]);
 
   const cycleDev = useCallback(() => {
     setEmotion((e) => {
@@ -38,8 +66,13 @@ function MascotRoot() {
   }, [cycleDev]);
 
   return (
-    <MascotWindow>
-      <EmotionEngine emotion={emotion} />
+    <MascotWindow emotion={emotion} animation={animation}>
+      <EmotionEngine
+        emotion={emotion}
+        animation={animation}
+        onAnimationComplete={onAnimationComplete}
+        onPet={handlePet}
+      />
     </MascotWindow>
   );
 }

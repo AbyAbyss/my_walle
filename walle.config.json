@@ -1,4 +1,7 @@
 {
+  "onboarding_complete": false,
+  "last_open_date": "",
+  "user_level": "standard",
   "user": {
     "name": "User"
   },
@@ -23,6 +26,7 @@
     "position": "bottom-right",
     "scale": 1.0,
     "idle_animation": true,
+    "idle_wander": true,
     "window_x": null,
     "window_y": null
   },

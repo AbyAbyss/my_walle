@@ -1,13 +1,16 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { useWalle } from "../../hooks/useWalle";
+import { normalizeUserLevel, saveUiPreferences } from "../../lib/uiPreferences";
 import type { LLMUsage, Workflow } from "../../store/walleStore";
 import { useWalleStore } from "../../store/walleStore";
+import OnboardingFlow from "../Onboarding/OnboardingFlow";
 import ActionCard from "./ActionCard";
 import InputBar from "./InputBar";
 import MessageList from "./MessageList";
+import SuggestionChips from "./SuggestionChips";
 import ModeToggle from "../UI/ModeToggle";
 import SettingsPanel from "./SettingsPanel";
 import { WorkflowPills } from "./WorkflowPills";
@@ -20,6 +23,9 @@ interface WorkflowConfigItem {
 }
 
 interface ChatConfigSnapshot {
+  onboarding_complete?: boolean;
+  last_open_date?: string;
+  user_level?: string;
   agent?: { mode?: string };
   llm?: {
     provider?: string;
@@ -74,6 +80,8 @@ export default function ChatPanel() {
   const [settings, setSettings] = useState(false);
   const [voiceTick, setVoiceTick] = useState(0);
   const [configSnapshot, setConfigSnapshot] = useState<ChatConfigSnapshot | null>(null);
+  const [showOnboarding, setShowOnboarding] = useState(false);
+  const firstOpenWaveRef = useRef(false);
 
   const loadConfig = async () => {
     try {
@@ -85,6 +93,18 @@ export default function ChatPanel() {
       }
       setWorkflows(normalizeWorkflows(parsed));
       setConfigSnapshot(parsed);
+      setShowOnboarding(parsed.onboarding_complete === false);
+
+      const today = new Date().toDateString();
+      if (!firstOpenWaveRef.current && parsed.last_open_date !== today) {
+        firstOpenWaveRef.current = true;
+        await saveUiPreferences({ last_open_date: today });
+        if (parsed.onboarding_complete !== false) {
+          window.setTimeout(() => {
+            useWalleStore.getState().playAnimation("wave");
+          }, 500);
+        }
+      }
     } catch {
       /* ignore */
     }
@@ -106,10 +126,11 @@ export default function ChatPanel() {
 
   const first = pending[0];
   const debugMode = configSnapshot?.ui?.debug_mode === true;
+  const userLevel = normalizeUserLevel(configSnapshot?.user_level);
 
   return (
     <div
-      className="flex flex-col h-full min-h-0 glass-panel overflow-hidden"
+      className="flex flex-col h-full min-h-0 glass-panel overflow-hidden relative"
       style={{
         width: 380,
         height: 620,
@@ -180,6 +201,7 @@ export default function ChatPanel() {
         <div className="px-3 shrink-0">
           <ActionCard
             action={first.action}
+            userLevel={userLevel}
             onApprove={() => void approveAction(first.id)}
             onDeny={() => void denyAction(first.id)}
           />
@@ -187,6 +209,8 @@ export default function ChatPanel() {
       )}
 
       <WorkflowPills workflows={workflows} onRun={(name) => void sendMessage(`run ${name}`)} />
+
+      <SuggestionChips userLevel={userLevel} onSelect={(text) => void sendMessage(text)} />
 
       <div className="shrink-0">
         <InputBar
@@ -201,6 +225,16 @@ export default function ChatPanel() {
         onClose={() => setSettings(false)}
         onSaved={() => void loadConfig()}
       />
+
+      {showOnboarding && (
+        <OnboardingFlow
+          onDismiss={() => {
+            setShowOnboarding(false);
+            void loadConfig();
+          }}
+          onTrySend={(text) => void sendMessage(text)}
+        />
+      )}
     </div>
   );
 }

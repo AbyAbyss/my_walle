@@ -1,6 +1,8 @@
 import { create } from "zustand";
 
+import type { Animation } from "../lib/animation";
 import type { Emotion } from "../lib/emotion";
+import { emitMascotAnimation } from "../lib/mascotBridge";
 import type { WalleAction } from "../lib/actionParser";
 
 export type ChatRole = "user" | "assistant";
@@ -44,6 +46,8 @@ interface WalleStore {
   addWorkflow: (workflow: Workflow) => void;
   setLastUsedModel: (model: string | null) => void;
   setLastUsage: (usage: LLMUsage | null) => void;
+  /** Drives mascot overlay animations (emits to mascot window). */
+  playAnimation: (animation: Animation) => void;
 }
 
 export const useWalleStore = create<WalleStore>((set) => ({
@@ -87,4 +91,7 @@ export const useWalleStore = create<WalleStore>((set) => ({
     })),
   setLastUsedModel: (lastUsedModel) => set({ lastUsedModel }),
   setLastUsage: (lastUsage) => set({ lastUsage }),
+  playAnimation: (animation) => {
+    void emitMascotAnimation(animation);
+  },
 }));

@@ -1,18 +1,40 @@
+import { forwardRef, useRef } from "react";
+
+import type { Animation } from "../../lib/animation";
 import type { Emotion } from "../../lib/emotion";
 
 /**
- * WALLE mascot — SVG + CSS keyframe emotions.
+ * WALLE mascot — SVG + CSS keyframe emotions and overlay animations.
  */
-export default function WalleMascot({ emotion }: { emotion: Emotion }) {
+const WalleMascot = forwardRef<
+  SVGSVGElement,
+  { emotion: Emotion; animation: Animation; onPet: () => void }
+>(function WalleMascot({ emotion, animation, onPet }, ref) {
+  const pointerDown = useRef<{ x: number; y: number } | null>(null);
+
+  const className = [emotion, animation !== "none" ? animation : ""].filter(Boolean).join(" ");
+
   return (
     <svg
+      ref={ref}
       id="walle"
-      className={emotion}
+      className={className}
       viewBox="0 0 160 200"
       xmlns="http://www.w3.org/2000/svg"
       width={160}
-      height={200}
+      height={168}
       aria-hidden
+      style={{ cursor: "pointer", display: "block" }}
+      onPointerDown={(e) => {
+        pointerDown.current = { x: e.clientX, y: e.clientY };
+      }}
+      onPointerUp={(e) => {
+        const start = pointerDown.current;
+        pointerDown.current = null;
+        if (!start) return;
+        const d = Math.hypot(e.clientX - start.x, e.clientY - start.y);
+        if (d < 12) onPet();
+      }}
     >
       <ellipse
         id="shadow"
@@ -78,7 +100,37 @@ export default function WalleMascot({ emotion }: { emotion: Emotion }) {
           height="18"
           rx="8"
           fill="#0f1117"
+          stroke="#2a3548"
+          strokeWidth="1"
         />
+
+        <g id="thumb" opacity="0" transform="translate(130, 130)">
+          <rect
+            x="0"
+            y="0"
+            width="8"
+            height="16"
+            rx="4"
+            fill="#1a1d2e"
+            stroke="#2a2f45"
+            strokeWidth="1"
+          />
+          <circle cx="4" cy="-2" r="5" fill="#1a1d2e" stroke="#2a2f45" strokeWidth="1" />
+        </g>
+
+        <g id="arms-stretch" opacity="0">
+          <rect id="arm-stretch-left" x="12" y="70" width="18" height="8" rx="4" fill="#141621" />
+          <rect id="arm-stretch-right" x="130" y="70" width="18" height="8" rx="4" fill="#141621" />
+        </g>
+      </g>
+
+      <g id="particles" opacity="0">
+        <circle id="p1" cx="80" cy="60" r="3" fill="var(--walle-cyan)" />
+        <circle id="p2" cx="80" cy="60" r="3" fill="var(--walle-amber)" />
+        <circle id="p3" cx="80" cy="60" r="3" fill="var(--walle-green)" />
+        <circle id="p4" cx="80" cy="60" r="3" fill="var(--walle-cyan)" />
+        <circle id="p5" cx="80" cy="60" r="3" fill="var(--walle-amber)" />
+        <circle id="p6" cx="80" cy="60" r="3" fill="var(--walle-green)" />
       </g>
 
       <g id="head">
@@ -161,6 +213,30 @@ export default function WalleMascot({ emotion }: { emotion: Emotion }) {
         />
       </g>
 
+      <g id="question-bubble" opacity="0" transform="translate(112, 10)">
+        <rect
+          x="0"
+          y="0"
+          width="26"
+          height="26"
+          rx="8"
+          fill="#1e2130"
+          stroke="var(--walle-cyan)"
+          strokeWidth="1"
+        />
+        <text
+          x="13"
+          y="18"
+          textAnchor="middle"
+          fontSize="14"
+          fill="var(--walle-cyan)"
+          fontFamily="var(--walle-font-ui)"
+        >
+          ?
+        </text>
+        <path d="M8 26 L4 32 L14 26Z" fill="#1e2130" />
+      </g>
+
       <g id="speech-bubble" opacity="0" transform="translate(110, 0)">
         <rect
           x="0"
@@ -174,4 +250,6 @@ export default function WalleMascot({ emotion }: { emotion: Emotion }) {
       </g>
     </svg>
   );
-}
+});
+
+export default WalleMascot;

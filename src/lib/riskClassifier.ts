@@ -89,6 +89,10 @@ export function needsApproval(
   action: WalleAction,
   mode: "auto" | "manual_review",
 ): boolean {
+  // Saved workflows are user-defined; running them is an explicit request — do not
+  // block on a second "Allow" click (that felt like "nothing happens").
+  if (action.plugin === "run_workflow") return false;
+
   const effective = effectiveRisk(action);
   if (effective === "dangerous") return true;
   if (effective === "moderate") return true;

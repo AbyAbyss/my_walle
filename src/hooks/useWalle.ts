@@ -11,6 +11,7 @@ import { parsePlan } from "../lib/actionParser";
 import { formatPluginResult } from "../lib/pluginResultFormat";
 import type { Emotion } from "../lib/emotion";
 import { needsApproval } from "../lib/riskClassifier";
+import { emitMascotAnimation } from "../lib/mascotBridge";
 import type { Workflow } from "../store/walleStore";
 import { useWalleStore } from "../store/walleStore";
 
@@ -60,6 +61,14 @@ async function emitMascotEmotion(emotion: Emotion) {
   await emitTo("mascot", "walle/emotion", { emotion });
 }
 
+function workflowSummaryOk(result: unknown): boolean {
+  if (!result || typeof result !== "object") return false;
+  const o = result as Record<string, unknown>;
+  if (o.ok !== true) return false;
+  const summary = String(o.summary ?? "");
+  return summary.length > 0 && !summary.includes("FAILED");
+}
+
 async function getAutoSummarizeEnabled(): Promise<boolean> {
   try {
     const raw = await invoke<string>("get_walle_config");
@@ -90,7 +99,7 @@ async function appendToolFollowUpSummary() {
       store.setEmotion(plan.emotion);
       await emitMascotEmotion(plan.emotion);
     } catch {
-      /* malformed JSON */
+      await emitMascotAnimation("confused");
     }
   } catch {
     /* network / API failure — keep raw tool line only */
@@ -99,6 +108,7 @@ async function appendToolFollowUpSummary() {
 
 async function runPluginActionWithResult(action: WalleAction): Promise<boolean> {
   const store = useWalleStore.getState();
+  const isWorkflow = action.plugin === "run_workflow";
   try {
     if (action.plugin === "save_workflow") {
       const workflow = workflowFromAction(action);
@@ -109,6 +119,10 @@ async function runPluginActionWithResult(action: WalleAction): Promise<boolean> 
         text: formatPluginResult(action.plugin, { ok: true }),
       });
       return false;
+    }
+
+    if (isWorkflow) {
+      await emitMascotAnimation("excited_run");
     }
 
     const result = await invoke<unknown>("run_plugin_action", {
@@ -122,8 +136,21 @@ async function runPluginActionWithResult(action: WalleAction): Promise<boolean> 
       role: "assistant",
       text: formatPluginResult(action.plugin, result),
     });
+
+    if (isWorkflow) {
+      await emitMascotAnimation("none");
+      if (workflowSummaryOk(result)) {
+        await emitMascotAnimation("dance");
+      }
+    } else {
+      await emitMascotAnimation("thumbs_up");
+    }
+
     return action.plugin === "shell" || action.plugin === "run_workflow";
   } catch (e) {
+    if (isWorkflow) {
+      await emitMascotAnimation("none");
+    }
     const msg = e instanceof Error ? e.message : String(e);
     store.addMessage({
       role: "assistant",
@@ -155,6 +182,7 @@ export function useWalle() {
         plan = parsePlan(response.raw);
       } catch {
         useWalleStore.getState().addMessage({ role: "assistant", text: response.raw });
+        await emitMascotAnimation("confused");
         await emitMascotEmotion("idle");
         return;
       }

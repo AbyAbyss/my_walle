@@ -51,6 +51,7 @@ pub fn run() {
             commands::save_agent_mode,
             commands::save_llm_settings,
             commands::save_workflow_to_config,
+            commands::save_ui_preferences,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

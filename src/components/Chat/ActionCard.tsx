@@ -3,14 +3,16 @@ import { useState } from "react";
 
 import type { WalleAction } from "../../lib/actionParser";
 import { effectiveRisk } from "../../lib/riskClassifier";
+import type { UserLevel } from "../../lib/uiPreferences";
 
 interface ActionCardProps {
   action: WalleAction;
+  userLevel: UserLevel;
   onApprove: () => void;
   onDeny: () => void;
 }
 
-export default function ActionCard({ action, onApprove, onDeny }: ActionCardProps) {
+export default function ActionCard({ action, userLevel, onApprove, onDeny }: ActionCardProps) {
   const [expanded, setExpanded] = useState(false);
   const [confirm, setConfirm] = useState("");
   const risk = effectiveRisk(action);
@@ -24,6 +26,8 @@ export default function ActionCard({ action, onApprove, onDeny }: ActionCardProp
         ? "2px solid var(--walle-yellow)"
         : "2px solid var(--walle-cyan)";
 
+  const showDetails = userLevel !== "simple";
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 8 }}
@@ -31,47 +35,117 @@ export default function ActionCard({ action, onApprove, onDeny }: ActionCardProp
       className="glass-panel mb-3 p-3 text-left"
       style={{ borderLeft: border }}
     >
-      <div className="flex items-center justify-between gap-2 mb-2">
-        <span className="text-sm font-medium" style={{ color: "var(--walle-text-primary)" }}>
-          {action.plugin}: {action.label}
-        </span>
-        <span
-          className="text-[11px] uppercase px-2 py-0.5 rounded"
-          style={{
-            background: "var(--walle-bg-3)",
-            color:
-              risk === "dangerous"
-                ? "var(--walle-red)"
-                : risk === "moderate"
-                  ? "var(--walle-yellow)"
-                  : "var(--walle-cyan)",
-          }}
-        >
-          {risk}
-        </span>
-      </div>
-      <button
-        type="button"
-        className="text-[11px] mb-2"
-        style={{ color: "var(--walle-text-secondary)" }}
-        onClick={() => setExpanded(!expanded)}
-      >
-        {expanded ? "Hide" : "Show"} raw params
-      </button>
-      {expanded && (
-        <pre
-          className="text-[11px] p-2 rounded mb-2 overflow-x-auto"
-          style={{
-            background: "var(--walle-bg-0)",
-            color: "var(--walle-text-secondary)",
-          }}
-        >
-          {JSON.stringify(action.params, null, 2)}
-        </pre>
+      {userLevel !== "simple" && (
+        <div className="flex items-center justify-between gap-2 mb-2">
+          <span className="text-sm font-medium" style={{ color: "var(--walle-text-primary)" }}>
+            {action.plugin}: {action.label}
+          </span>
+          <span
+            className="text-[11px] uppercase px-2 py-0.5 rounded"
+            style={{
+              background: "var(--walle-bg-3)",
+              color:
+                risk === "dangerous"
+                  ? "var(--walle-red)"
+                  : risk === "moderate"
+                    ? "var(--walle-yellow)"
+                    : "var(--walle-cyan)",
+            }}
+          >
+            {risk}
+          </span>
+        </div>
       )}
+
+      {userLevel === "simple" && (
+        <div className="flex items-center justify-end gap-2 mb-2">
+          <span
+            className="text-[11px] uppercase px-2 py-0.5 rounded"
+            style={{
+              background: "var(--walle-bg-3)",
+              color:
+                risk === "dangerous"
+                  ? "var(--walle-red)"
+                  : risk === "moderate"
+                    ? "var(--walle-yellow)"
+                    : "var(--walle-cyan)",
+            }}
+          >
+            {risk}
+          </span>
+        </div>
+      )}
+
+      <p
+        className="text-sm m-0 mb-2"
+        style={{ fontSize: "14px", color: "var(--walle-text-primary)" }}
+      >
+        {action.label}
+      </p>
+
+      {showDetails && (
+        <>
+          {userLevel === "standard" && (
+            <>
+              <button
+                type="button"
+                className="text-[11px] mb-2"
+                style={{ color: "var(--walle-text-secondary)" }}
+                onClick={() => setExpanded(!expanded)}
+              >
+                {expanded ? "Hide" : "Show"} details
+              </button>
+              {expanded && (
+                <code
+                  style={{
+                    display: "block",
+                    fontSize: "11px",
+                    fontFamily: "var(--walle-font-mono)",
+                    color: "var(--walle-cyan)",
+                    marginTop: "4px",
+                    padding: "6px",
+                    background: "rgba(0,0,0,0.3)",
+                    borderRadius: "var(--walle-radius-sm)",
+                    whiteSpace: "pre-wrap",
+                    wordBreak: "break-word",
+                  }}
+                >
+                  {JSON.stringify(action.params, null, 2)}
+                </code>
+              )}
+            </>
+          )}
+          {userLevel === "developer" && (
+            <div style={{ marginTop: "6px" }}>
+              <div
+                className="text-[11px] mb-1"
+                style={{ color: "var(--walle-text-muted)" }}
+              >
+                Command
+              </div>
+              <code
+                style={{
+                  display: "block",
+                  fontSize: "11px",
+                  fontFamily: "var(--walle-font-mono)",
+                  color: "var(--walle-cyan)",
+                  padding: "6px",
+                  background: "rgba(0,0,0,0.3)",
+                  borderRadius: "var(--walle-radius-sm)",
+                  whiteSpace: "pre-wrap",
+                  wordBreak: "break-word",
+                }}
+              >
+                {JSON.stringify(action.params, null, 2)}
+              </code>
+            </div>
+          )}
+        </>
+      )}
+
       {isDanger && (
         <input
-          className="w-full mb-2 px-2 py-1 rounded text-sm"
+          className="w-full mb-2 px-2 py-1 rounded text-sm mt-2"
           style={{
             background: "var(--walle-bg-2)",
             border: "1px solid var(--walle-glass-border)",
@@ -82,7 +156,7 @@ export default function ActionCard({ action, onApprove, onDeny }: ActionCardProp
           onChange={(e) => setConfirm(e.target.value)}
         />
       )}
-      <div className="flex gap-2 justify-end">
+      <div className="flex gap-2 justify-end mt-2">
         <button
           type="button"
           className="px-3 py-1.5 rounded text-sm"

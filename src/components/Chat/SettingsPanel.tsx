@@ -1,6 +1,12 @@
 import { invoke } from "@tauri-apps/api/core";
 import { useEffect, useState } from "react";
 
+import {
+  normalizeUserLevel,
+  saveUiPreferences,
+  type UserLevel,
+} from "../../lib/uiPreferences";
+
 interface SettingsPanelProps {
   open: boolean;
   onClose: () => void;
@@ -8,6 +14,7 @@ interface SettingsPanelProps {
 }
 
 interface SettingsConfig {
+  user_level?: string;
   llm?: {
     provider?: string;
     model?: string;
@@ -172,6 +179,7 @@ export default function SettingsPanel({ open, onClose, onSaved }: SettingsPanelP
   const [apiKey, setApiKey] = useState("");
   const [status, setStatus] = useState("");
   const [keySaved, setKeySaved] = useState<boolean | null>(null);
+  const [userLevel, setUserLevel] = useState<UserLevel>("standard");
 
   const refreshKeyStatus = async (nextProvider: ProviderName) => {
     if (!PROVIDER_PRESETS[nextProvider].requiresApiKey) {
@@ -209,6 +217,7 @@ export default function SettingsPanel({ open, onClose, onSaved }: SettingsPanelP
         setBaseUrl(llm.base_url ?? PROVIDER_PRESETS[nextProvider].baseUrl);
         setSmartRouting(llm.smart_routing !== false);
         setDebugMode(parsed.ui?.debug_mode === true);
+        setUserLevel(normalizeUserLevel(parsed.user_level));
         setStatus("");
         setApiKey("");
         await refreshKeyStatus(nextProvider);
@@ -251,6 +260,7 @@ export default function SettingsPanel({ open, onClose, onSaved }: SettingsPanelP
         await invoke("save_provider_api_key", { provider, key: apiKey.trim() });
         setApiKey("");
       }
+      await saveUiPreferences({ user_level: userLevel });
       await refreshKeyStatus(provider);
       setStatus("Settings saved. Keys stay separated by provider.");
       onSaved();
@@ -408,6 +418,52 @@ export default function SettingsPanel({ open, onClose, onSaved }: SettingsPanelP
               </div>
             </section>
           </div>
+
+          <section style={{ ...sectionStyle, marginBottom: 16 }}>
+            <SectionHeader
+              eyebrow="Experience"
+              title="How do you want WALLE to talk to you?"
+              body="Plain language only, optional details, or full technical details."
+            />
+            <div className="grid gap-2">
+              {(
+                [
+                  { id: "simple" as const, label: "Simple", hint: "Plain language only, no tech details" },
+                  { id: "standard" as const, label: "Standard", hint: "Label + expandable details" },
+                  { id: "developer" as const, label: "Developer", hint: "Full command details always visible" },
+                ] as const
+              ).map((opt) => (
+                <label
+                  key={opt.id}
+                  className="flex items-start gap-3 cursor-pointer rounded-xl p-3"
+                  style={{
+                    background:
+                      userLevel === opt.id ? "var(--walle-cyan-dim)" : "rgba(10,10,15,0.72)",
+                    border:
+                      userLevel === opt.id
+                        ? "1px solid rgba(0, 212, 255, 0.35)"
+                        : "1px solid var(--walle-glass-border)",
+                  }}
+                >
+                  <input
+                    type="radio"
+                    name="userLevel"
+                    checked={userLevel === opt.id}
+                    onChange={() => setUserLevel(opt.id)}
+                    style={{ marginTop: 3 }}
+                  />
+                  <div>
+                    <div className="text-[13px] font-medium" style={{ color: "var(--walle-text-primary)" }}>
+                      {opt.label}
+                    </div>
+                    <div className="text-[12px] mt-0.5" style={{ color: "var(--walle-text-secondary)" }}>
+                      {opt.hint}
+                    </div>
+                  </div>
+                </label>
+              ))}
+            </div>
+          </section>
 
           <div
             style={{
