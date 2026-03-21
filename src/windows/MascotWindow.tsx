@@ -1,11 +1,10 @@
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useCallback, useEffect, useRef } from "react";
-import WalleMascot from "../components/Mascot/WalleMascot";
 
 const SAVE_DEBOUNCE_MS = 320;
 
-export default function MascotWindow() {
+export default function MascotWindow({ children }: { children: React.ReactNode }) {
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const savePosition = useCallback(async () => {
@@ -53,7 +52,7 @@ export default function MascotWindow() {
       }}
       onMouseDown={onDragMouseDown}
     >
-      <WalleMascot />
+      {children}
     </div>
   );
 }

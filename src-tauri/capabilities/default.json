@@ -1,15 +1,34 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Mascot window — drag, position, and config IPC",
-  "windows": ["mascot"],
+  "description": "WALLE windows — mascot, setup, chat",
+  "windows": ["mascot", "setup", "chat"],
   "permissions": [
     "core:default",
     "opener:default",
     "core:window:allow-start-dragging",
     "core:window:allow-outer-position",
     "core:window:allow-scale-factor",
+    "core:window:allow-set-focus",
+    "core:window:allow-show",
+    "core:window:allow-hide",
+    "core:window:allow-close",
+    "core:webview:allow-webview-show",
+    "core:webview:allow-webview-hide",
+    "notification:default",
+    "global-shortcut:default",
     "allow-get-walle-config",
-    "allow-save-mascot-position"
+    "allow-save-mascot-position",
+    "allow-has-api-key",
+    "allow-save-api-key",
+    "allow-clear-api-key",
+    "allow-complete-setup-flow",
+    "allow-walle-chat",
+    "allow-toggle-chat-window",
+    "allow-shell-run",
+    "allow-launch-app",
+    "allow-send-notify",
+    "allow-run-plugin-action",
+    "allow-save-agent-mode"
   ]
 }

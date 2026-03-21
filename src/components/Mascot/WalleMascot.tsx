@@ -1,11 +1,13 @@
+import type { Emotion } from "../../lib/emotion";
+
 /**
- * WALLE mascot — SVG + CSS (idle breathing for Step 2).
+ * WALLE mascot — SVG + CSS keyframe emotions.
  */
-export default function WalleMascot() {
+export default function WalleMascot({ emotion }: { emotion: Emotion }) {
   return (
     <svg
       id="walle"
-      className="idle"
+      className={emotion}
       viewBox="0 0 160 200"
       xmlns="http://www.w3.org/2000/svg"
       width={160}
