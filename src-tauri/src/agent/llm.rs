@@ -11,6 +11,34 @@ pub struct ChatHistoryItem {
     pub text: String,
 }
 
+fn normalize_role(role: &str) -> &'static str {
+    if role == "assistant" {
+        "assistant"
+    } else {
+        "user"
+    }
+}
+
+/// Merge consecutive same-role turns so the API always alternates user/assistant.
+fn coalesce_history(items: &[ChatHistoryItem]) -> Vec<ChatHistoryItem> {
+    let mut out: Vec<ChatHistoryItem> = Vec::new();
+    for h in items {
+        let r = normalize_role(h.role.trim());
+        if let Some(last) = out.last_mut() {
+            if normalize_role(last.role.trim()) == r {
+                last.text.push_str("\n\n");
+                last.text.push_str(&h.text);
+                continue;
+            }
+        }
+        out.push(ChatHistoryItem {
+            role: r.to_string(),
+            text: h.text.clone(),
+        });
+    }
+    out
+}
+
 pub async fn walle_complete(
     app: &AppHandle,
     user_text: &str,
@@ -77,7 +105,7 @@ Params MUST use these exact keys (do not omit or rename):
 
 Example app_launch action: {{ "plugin": "app_launch", "label": "Open PowerShell", "risk": "low", "params": {{ "app": "PowerShell" }} }}
 
-For shell or any action that produces output: do not promise live streaming. Say the result will appear in the next chat message after the command runs.
+For shell or any action that produces output: do not promise live streaming. The app shows raw output in the next chat bubble; a follow-up reply will summarize it when needed—the user does not have to send another message for that.
 
 If mode is manual_review, always set requires_approval: true for any action.
 If risk is "high", always set requires_approval: true regardless of mode.
@@ -111,16 +139,18 @@ async fn anthropic_messages(
     history: &[ChatHistoryItem],
     user_text: &str,
 ) -> Result<String, String> {
+    let mut combined: Vec<ChatHistoryItem> = history.to_vec();
+    combined.push(ChatHistoryItem {
+        role: "user".to_string(),
+        text: user_text.to_string(),
+    });
+    let merged = coalesce_history(&combined);
+
     let mut messages: Vec<serde_json::Value> = Vec::new();
-    for h in history {
-        let role = if h.role == "assistant" {
-            "assistant"
-        } else {
-            "user"
-        };
+    for h in merged {
+        let role = normalize_role(h.role.trim());
         messages.push(json!({ "role": role, "content": h.text }));
     }
-    messages.push(json!({ "role": "user", "content": user_text }));
 
     let client = reqwest::Client::new();
     let res = client

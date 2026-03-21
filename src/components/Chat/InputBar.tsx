@@ -12,13 +12,14 @@ export default function InputBar({ onSend, disabled, voiceTrigger }: InputBarPro
   const [text, setText] = useState("");
   const { listening, startListening, stopListening } = useVoice((t) => {
     onSend(t);
-  });
+  }, disabled);
 
   useEffect(() => {
+    if (disabled) return;
     if (voiceTrigger && voiceTrigger > 0) {
       startListening();
     }
-  }, [voiceTrigger, startListening]);
+  }, [voiceTrigger, startListening, disabled]);
 
   return (
     <div
@@ -28,12 +29,15 @@ export default function InputBar({ onSend, disabled, voiceTrigger }: InputBarPro
       <button
         type="button"
         title="Voice (Ctrl+Shift+V)"
+        disabled={disabled}
         className="rounded-full w-9 h-9 flex items-center justify-center"
         style={{
           background: "var(--walle-bg-2)",
           color: listening ? "var(--walle-cyan)" : "var(--walle-text-secondary)",
+          opacity: disabled ? 0.45 : 1,
         }}
         onClick={() => {
+          if (disabled) return;
           if (listening) stopListening();
           else startListening();
         }}

@@ -1,8 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 
-export function useVoice(onTranscript: (text: string) => void) {
+export function useVoice(onTranscript: (text: string) => void, disabled?: boolean) {
   const cb = useRef(onTranscript);
   cb.current = onTranscript;
+
+  const disabledRef = useRef(false);
+  disabledRef.current = disabled ?? false;
 
   const recognition = useRef<{
     continuous: boolean;
@@ -28,6 +31,10 @@ export function useVoice(onTranscript: (text: string) => void) {
     r.interimResults = false;
     r.lang = "en-US";
     r.onresult = (e) => {
+      if (disabledRef.current) {
+        setListening(false);
+        return;
+      }
       const text = e.results[0][0].transcript;
       cb.current(text);
       setListening(false);
@@ -39,6 +46,7 @@ export function useVoice(onTranscript: (text: string) => void) {
   }, []);
 
   const startListening = () => {
+    if (disabledRef.current) return;
     try {
       recognition.current?.start();
       setListening(true);

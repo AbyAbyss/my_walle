@@ -4,13 +4,14 @@
   },
   "llm": {
     "provider": "anthropic",
-    "model": "claude-sonnet-4-6",
+    "model": "claude-haiku-4-5-20251001",
     "api_key_env": "ANTHROPIC_API_KEY",
     "max_tokens": 2048,
     "temperature": 0.7
   },
   "agent": {
     "mode": "manual_review",
+    "auto_summarize_tool_output": true,
     "always_confirm_dangerous": true,
     "always_confirm_moderate": true
   },

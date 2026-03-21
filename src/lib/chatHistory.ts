@@ -20,3 +20,23 @@ export function buildChatHistoryPayload(messages: ChatMessage[]): ChatHistoryPay
         : m.text,
   }));
 }
+
+function truncateMessageText(text: string): string {
+  return text.length > MAX_CHARS_PER_MESSAGE
+    ? `${text.slice(0, MAX_CHARS_PER_MESSAGE)}… (truncated)`
+    : text;
+}
+
+/**
+ * Full recent transcript for post-tool follow-up (includes the latest assistant lines, e.g. shell **Result**).
+ */
+export function buildHistoryForFollowUp(messages: ChatMessage[]): ChatHistoryPayloadItem[] {
+  const window = messages.slice(-MAX_HISTORY_MESSAGES);
+  return window.map((m) => ({
+    role: m.role,
+    text: truncateMessageText(m.text),
+  }));
+}
+
+/** Internal user turn for follow-up LLM call (not shown in UI). */
+export const TOOL_FOLLOWUP_USER_TEXT = `[WALLE internal] The transcript above includes the user's question and raw tool output (e.g. lines starting with **Result**). Reply ONLY with valid JSON matching the usual schema. Set "actions": [] and "requires_approval": false. The "message" field must briefly answer the user's question using that tool output (one or two sentences). Pick an appropriate "emotion".`;
