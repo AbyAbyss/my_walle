@@ -1,0 +1,38 @@
+{
+  "user": {
+    "name": "User"
+  },
+  "llm": {
+    "provider": "anthropic",
+    "model": "claude-sonnet-4-6",
+    "api_key_env": "ANTHROPIC_API_KEY",
+    "max_tokens": 512,
+    "temperature": 0.7
+  },
+  "agent": {
+    "mode": "manual_review",
+    "always_confirm_dangerous": true,
+    "always_confirm_moderate": true
+  },
+  "workflows": [],
+  "mascot": {
+    "position": "bottom-right",
+    "scale": 1.0,
+    "idle_animation": true,
+    "window_x": null,
+    "window_y": null
+  },
+  "hotkeys": {
+    "toggle_chat": "Ctrl+Shift+Space",
+    "toggle_voice": "Ctrl+Shift+V",
+    "toggle_mode": "Ctrl+Shift+M"
+  },
+  "ui": {
+    "theme": "dark-glass",
+    "accent": "cyan",
+    "chat_side": "left"
+  },
+  "plugins": {
+    "enabled": ["shell", "app_launch", "notify"]
+  }
+}

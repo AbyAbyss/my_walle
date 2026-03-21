@@ -1,0 +1,15 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Mascot window — drag, position, and config IPC",
+  "windows": ["mascot"],
+  "permissions": [
+    "core:default",
+    "opener:default",
+    "core:window:allow-start-dragging",
+    "core:window:allow-outer-position",
+    "core:window:allow-scale-factor",
+    "allow-get-walle-config",
+    "allow-save-mascot-position"
+  ]
+}

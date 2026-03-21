@@ -1,0 +1,51 @@
+@import "./tokens.css";
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: transparent;
+  font-family: var(--walle-font-ui);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* idle — gentle breathing (Step 2: idle only; more emotions in Step 3) */
+@keyframes walle-breathe {
+  0%,
+  100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-3px);
+  }
+}
+
+#walle.idle #body {
+  animation: walle-breathe 3.5s ease-in-out infinite;
+}
+
+#walle.idle #eye-l,
+#walle.idle #eye-r {
+  animation: walle-eye-pulse 3.5s ease-in-out infinite;
+}
+
+@keyframes walle-eye-pulse {
+  0%,
+  100% {
+    opacity: 0.85;
+  }
+  50% {
+    opacity: 1;
+    filter: drop-shadow(0 0 4px var(--walle-amber));
+  }
+}
