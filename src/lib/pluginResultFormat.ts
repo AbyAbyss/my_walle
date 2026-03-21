@@ -29,8 +29,17 @@ export function formatPluginResult(plugin: string, result: unknown): string {
     }
     case "app_launch":
       return "**Result** (app_launch): Launched.";
-    case "notify":
+    case "notify": {
+      if (o.scheduled === true && typeof o.delay_seconds === "number") {
+        const m = Math.round(o.delay_seconds / 60);
+        const human =
+          o.delay_seconds >= 60 && o.delay_seconds % 60 === 0
+            ? `${m} minute${m === 1 ? "" : "s"}`
+            : `${o.delay_seconds} seconds`;
+        return `**Result** (notify): Scheduled — toast in ${human}.`;
+      }
       return "**Result** (notify): Sent.";
+    }
     case "save_workflow":
       return "**Result** (save_workflow): Saved.";
     default:

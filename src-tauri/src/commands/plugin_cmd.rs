@@ -3,7 +3,7 @@ use serde_json::json;
 use tauri::AppHandle;
 
 use crate::commands::app_launch::launch_app;
-use crate::commands::notify::send_notify;
+use crate::commands::notify::{parse_notify_delay_secs, send_notify, spawn_delayed_notify};
 use crate::commands::shell::shell_run;
 use crate::config;
 
@@ -64,8 +64,17 @@ async fn dispatch_simple_plugin(app: &AppHandle, action: PluginAction) -> Result
                 .and_then(|c| c.as_str())
                 .unwrap_or("")
                 .to_string();
-            send_notify(app.clone(), title, body).await?;
-            Ok(json!({ "ok": true }))
+            let delay_secs = parse_notify_delay_secs(&action.params);
+            if delay_secs == 0 {
+                send_notify(app.clone(), title, body).await?;
+                Ok(json!({ "ok": true }))
+            } else {
+                spawn_delayed_notify(app.clone(), title, body, delay_secs);
+                Ok(json!({
+                    "ok": true,
+                    "scheduled": true,
+                    "delay_seconds": delay_secs }))
+            }
         }
         "save_workflow" => {
             save_workflow_impl(app, &action.params)?;

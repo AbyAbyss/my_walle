@@ -197,7 +197,8 @@ Respond ONLY with valid JSON - no markdown, no explanation:
 Params MUST use these exact keys:
 - shell: {{ "command": "PowerShell command string" }}
 - app_launch: {{ "app": "AppName" }}
-- notify: {{ "title": "short title", "body": "message body" }}
+- notify: {{ "title": "short title", "body": "message body", "delay_seconds": optional number, "delay_minutes": optional number }}
+  For reminders ("remind me in 10 minutes"), set delay_minutes or delay_seconds so the toast fires after that wait. Immediate notify: omit both delay fields.
 - save_workflow: {{ "name": "workflow name", "description": "optional", "steps": [ same action objects as above ] }}
 - run_workflow: {{ "name": "saved_workflow_name" }}
 
