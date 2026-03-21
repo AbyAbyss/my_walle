@@ -30,8 +30,21 @@ pub fn ensure_config_exists(app: &AppHandle) -> Result<(), String> {
 }
 
 pub fn read_config_string(app: &AppHandle) -> Result<String, String> {
+    ensure_config_exists(app)?;
     let p = config_path(app)?;
     std::fs::read_to_string(&p).map_err(|e| e.to_string())
+}
+
+pub fn read_config_json(app: &AppHandle) -> Result<serde_json::Value, String> {
+    let text = read_config_string(app)?;
+    serde_json::from_str(&text).map_err(|e| e.to_string())
+}
+
+pub fn write_config_json(app: &AppHandle, value: &serde_json::Value) -> Result<(), String> {
+    let p = config_path(app)?;
+    ensure_config_exists(app)?;
+    let out = serde_json::to_string_pretty(value).map_err(|e| e.to_string())?;
+    std::fs::write(&p, out).map_err(|e| e.to_string())
 }
 
 /// Reads saved logical position, or default bottom-right of the primary monitor.

@@ -5220,6 +5220,7 @@ name = "walle"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-trait",
  "chrono",
  "keyring",
  "reqwest 0.12.28",

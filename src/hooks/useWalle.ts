@@ -11,7 +11,50 @@ import { parsePlan } from "../lib/actionParser";
 import { formatPluginResult } from "../lib/pluginResultFormat";
 import type { Emotion } from "../lib/emotion";
 import { needsApproval } from "../lib/riskClassifier";
+import type { Workflow } from "../store/walleStore";
 import { useWalleStore } from "../store/walleStore";
+
+interface WalleChatResponse {
+  raw: string;
+  model: string;
+  input_tokens: number;
+  output_tokens: number;
+}
+
+function normalizeWorkflowStep(step: unknown): WalleAction {
+  const raw = step as Record<string, unknown>;
+  return {
+    plugin: String(raw.plugin ?? "notify"),
+    label: String(raw.label ?? ""),
+    risk: raw.risk === "medium" || raw.risk === "high" ? raw.risk : "low",
+    params: (raw.params as Record<string, unknown>) ?? {},
+  };
+}
+
+function workflowFromAction(action: WalleAction): Workflow {
+  const params = action.params as Record<string, unknown>;
+  const name = String(params.name ?? "").trim();
+  if (!name) {
+    throw new Error("workflow name required");
+  }
+
+  const steps = Array.isArray(params.steps)
+    ? params.steps.map((step) => normalizeWorkflowStep(step))
+    : [];
+  if (!steps.length) {
+    throw new Error("workflow steps required");
+  }
+
+  return {
+    name,
+    description:
+      typeof params.description === "string" && params.description.trim()
+        ? params.description.trim()
+        : undefined,
+    steps,
+    created_at: new Date().toISOString(),
+  };
+}
 
 async function emitMascotEmotion(emotion: Emotion) {
   await emitTo("mascot", "walle/emotion", { emotion });
@@ -32,11 +75,17 @@ async function appendToolFollowUpSummary() {
   const store = useWalleStore.getState();
   try {
     const history = buildHistoryForFollowUp(useWalleStore.getState().messages);
-    const raw = await invoke<string>("walle_chat", {
+    const response = await invoke<WalleChatResponse>("walle_chat", {
       payload: { userText: TOOL_FOLLOWUP_USER_TEXT, history },
     });
+    store.setLastUsedModel(response.model);
+    store.setLastUsage({
+      model: response.model,
+      inputTokens: response.input_tokens ?? 0,
+      outputTokens: response.output_tokens ?? 0,
+    });
     try {
-      const plan = parsePlan(raw);
+      const plan = parsePlan(response.raw);
       store.addMessage({ role: "assistant", text: plan.message });
       store.setEmotion(plan.emotion);
       await emitMascotEmotion(plan.emotion);
@@ -51,6 +100,17 @@ async function appendToolFollowUpSummary() {
 async function runPluginActionWithResult(action: WalleAction): Promise<boolean> {
   const store = useWalleStore.getState();
   try {
+    if (action.plugin === "save_workflow") {
+      const workflow = workflowFromAction(action);
+      await invoke("save_workflow_to_config", { workflow });
+      store.addWorkflow(workflow);
+      store.addMessage({
+        role: "assistant",
+        text: formatPluginResult(action.plugin, { ok: true }),
+      });
+      return false;
+    }
+
     const result = await invoke<unknown>("run_plugin_action", {
       action: {
         plugin: action.plugin,
@@ -81,14 +141,20 @@ export function useWalle() {
     try {
       await emitMascotEmotion("thinking");
       const history = buildChatHistoryPayload(useWalleStore.getState().messages);
-      const raw = await invoke<string>("walle_chat", {
+      const response = await invoke<WalleChatResponse>("walle_chat", {
         payload: { userText: text, history },
+      });
+      store.setLastUsedModel(response.model);
+      store.setLastUsage({
+        model: response.model,
+        inputTokens: response.input_tokens ?? 0,
+        outputTokens: response.output_tokens ?? 0,
       });
       let plan;
       try {
-        plan = parsePlan(raw);
+        plan = parsePlan(response.raw);
       } catch {
-        useWalleStore.getState().addMessage({ role: "assistant", text: raw });
+        useWalleStore.getState().addMessage({ role: "assistant", text: response.raw });
         await emitMascotEmotion("idle");
         return;
       }
@@ -130,24 +196,10 @@ export function useWalle() {
     store.setThinking(true);
     try {
       await emitMascotEmotion("thinking");
-      const result = await invoke<unknown>("run_plugin_action", {
-        action: {
-          plugin: item.action.plugin,
-          label: item.action.label,
-          params: item.action.params,
-        },
-      });
-      store.addMessage({
-        role: "assistant",
-        text: formatPluginResult(item.action.plugin, result),
-      });
+      const ranSummarizableTool = await runPluginActionWithResult(item.action);
       store.dequeueAction(id);
 
-      const plugin = item.action.plugin;
-      if (
-        (plugin === "shell" || plugin === "run_workflow") &&
-        (await getAutoSummarizeEnabled())
-      ) {
+      if (ranSummarizableTool && (await getAutoSummarizeEnabled())) {
         await appendToolFollowUpSummary();
       } else {
         await emitMascotEmotion("happy");

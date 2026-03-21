@@ -17,7 +17,10 @@ pub fn run() {
             let handle = app.handle().clone();
             config::ensure_config_exists(&handle)?;
 
-            if !keychain::has_api_key() {
+            let provider = agent::llm::current_provider_name(&handle)
+                .unwrap_or_else(|_| "anthropic".to_string());
+            let needs_api_key = agent::llm::provider_requires_api_key(&handle).unwrap_or(true);
+            if needs_api_key && !keychain::has_api_key_for_provider(&provider) {
                 windows::create_setup_window(&handle)?;
             } else {
                 windows::create_mascot_window(&handle)?;
@@ -33,8 +36,11 @@ pub fn run() {
             commands::get_walle_config,
             commands::save_mascot_position,
             commands::has_api_key,
+            commands::has_provider_api_key,
             commands::save_api_key,
+            commands::save_provider_api_key,
             commands::clear_api_key,
+            commands::clear_provider_api_key,
             commands::complete_setup_flow,
             commands::walle_chat,
             commands::toggle_chat_window,
@@ -43,6 +49,8 @@ pub fn run() {
             commands::send_notify,
             commands::run_plugin_action,
             commands::save_agent_mode,
+            commands::save_llm_settings,
+            commands::save_workflow_to_config,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

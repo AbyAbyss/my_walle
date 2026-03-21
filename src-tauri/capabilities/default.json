@@ -20,8 +20,11 @@
     "allow-get-walle-config",
     "allow-save-mascot-position",
     "allow-has-api-key",
+    "allow-has-provider-api-key",
     "allow-save-api-key",
+    "allow-save-provider-api-key",
     "allow-clear-api-key",
+    "allow-clear-provider-api-key",
     "allow-complete-setup-flow",
     "allow-walle-chat",
     "allow-toggle-chat-window",
@@ -29,6 +32,8 @@
     "allow-launch-app",
     "allow-send-notify",
     "allow-run-plugin-action",
-    "allow-save-agent-mode"
+    "allow-save-agent-mode",
+    "allow-save-llm-settings",
+    "allow-save-workflow-to-config"
   ]
 }

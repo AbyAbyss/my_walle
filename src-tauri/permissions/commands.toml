@@ -3,12 +3,24 @@ identifier = "allow-has-api-key"
 commands.allow = ["has_api_key"]
 
 [[permission]]
+identifier = "allow-has-provider-api-key"
+commands.allow = ["has_provider_api_key"]
+
+[[permission]]
 identifier = "allow-save-api-key"
 commands.allow = ["save_api_key"]
 
 [[permission]]
+identifier = "allow-save-provider-api-key"
+commands.allow = ["save_provider_api_key"]
+
+[[permission]]
 identifier = "allow-clear-api-key"
 commands.allow = ["clear_api_key"]
+
+[[permission]]
+identifier = "allow-clear-provider-api-key"
+commands.allow = ["clear_provider_api_key"]
 
 [[permission]]
 identifier = "allow-complete-setup-flow"
@@ -41,3 +53,7 @@ commands.allow = ["run_plugin_action"]
 [[permission]]
 identifier = "allow-save-agent-mode"
 commands.allow = ["save_agent_mode"]
+
+[[permission]]
+identifier = "allow-save-llm-settings"
+commands.allow = ["save_llm_settings"]

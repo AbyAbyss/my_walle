@@ -93,9 +93,7 @@ fn save_workflow_impl(app: &AppHandle, params: &serde_json::Value) -> Result<(),
         .and_then(|n| n.as_str())
         .ok_or_else(|| "workflow name required".to_string())?;
     let steps = params.get("steps").cloned().ok_or_else(|| "steps required".to_string())?;
-    let p = config::config_path(app)?;
-    let text = std::fs::read_to_string(&p).map_err(|e| e.to_string())?;
-    let mut v: serde_json::Value = serde_json::from_str(&text).map_err(|e| e.to_string())?;
+    let mut v = config::read_config_json(app)?;
     if !v["workflows"].is_array() {
         v["workflows"] = json!([]);
     }
@@ -108,12 +106,7 @@ fn save_workflow_impl(app: &AppHandle, params: &serde_json::Value) -> Result<(),
     });
     arr.retain(|w| w["name"].as_str() != Some(name));
     arr.push(entry);
-    std::fs::write(
-        &p,
-        serde_json::to_string_pretty(&v).map_err(|e| e.to_string())?,
-    )
-    .map_err(|e| e.to_string())?;
-    Ok(())
+    config::write_config_json(app, &v)
 }
 
 async fn run_workflow_impl(app: &AppHandle, params: &serde_json::Value) -> Result<String, String> {
@@ -126,7 +119,12 @@ async fn run_workflow_impl(app: &AppHandle, params: &serde_json::Value) -> Resul
     let workflows = v["workflows"].as_array().ok_or_else(|| "no workflows".to_string())?;
     let wf = workflows
         .iter()
-        .find(|w| w["name"].as_str() == Some(name))
+        .find(|w| {
+            w["name"]
+                .as_str()
+                .map(|workflow_name| workflow_name.eq_ignore_ascii_case(name))
+                .unwrap_or(false)
+        })
         .ok_or_else(|| format!("workflow '{}' not found", name))?;
     let steps = wf["steps"].as_array().ok_or_else(|| "invalid workflow steps".to_string())?;
     let mut lines = Vec::new();

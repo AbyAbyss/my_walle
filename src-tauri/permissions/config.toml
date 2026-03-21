@@ -7,3 +7,8 @@ commands.allow = ["get_walle_config"]
 identifier = "allow-save-mascot-position"
 description = "Allows persisting mascot window position to walle.config.json."
 commands.allow = ["save_mascot_position"]
+
+[[permission]]
+identifier = "allow-save-workflow-to-config"
+description = "Allows persisting workflows to walle.config.json."
+commands.allow = ["save_workflow_to_config"]

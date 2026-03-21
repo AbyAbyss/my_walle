@@ -1,14 +1,55 @@
-use serde::Deserialize;
-use serde_json::json;
+use serde::{Deserialize, Serialize};
 use tauri::AppHandle;
 
+use crate::agent::adapters::{get_adapter, LLMConfig, LLMMessage, LLMRequest};
+use crate::agent::model_router::select_model;
 use crate::config;
 use crate::keychain;
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct ChatHistoryItem {
     pub role: String,
     pub text: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct WalleCompletion {
+    pub raw: String,
+    pub model: String,
+    pub input_tokens: u64,
+    pub output_tokens: u64,
+}
+
+#[derive(Debug, Deserialize)]
+struct UserConfig {
+    name: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct AgentConfig {
+    mode: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct WorkflowConfig {
+    name: String,
+    description: Option<String>,
+    #[serde(default)]
+    steps: Vec<serde_json::Value>,
+}
+
+#[derive(Debug, Deserialize)]
+struct PluginsConfig {
+    enabled: Option<Vec<String>>,
+}
+
+#[derive(Debug, Deserialize)]
+struct AppConfig {
+    user: Option<UserConfig>,
+    agent: Option<AgentConfig>,
+    llm: LLMConfig,
+    workflows: Option<Vec<WorkflowConfig>>,
+    plugins: Option<PluginsConfig>,
 }
 
 fn normalize_role(role: &str) -> &'static str {
@@ -19,7 +60,6 @@ fn normalize_role(role: &str) -> &'static str {
     }
 }
 
-/// Merge consecutive same-role turns so the API always alternates user/assistant.
 fn coalesce_history(items: &[ChatHistoryItem]) -> Vec<ChatHistoryItem> {
     let mut out: Vec<ChatHistoryItem> = Vec::new();
     for h in items {
@@ -39,164 +79,218 @@ fn coalesce_history(items: &[ChatHistoryItem]) -> Vec<ChatHistoryItem> {
     out
 }
 
-pub async fn walle_complete(
-    app: &AppHandle,
-    user_text: &str,
-    history: &[ChatHistoryItem],
-) -> Result<String, String> {
-    let api_key = keychain::get_api_key()?;
-    let cfg_str = config::read_config_string(app)?;
-    let v: serde_json::Value = serde_json::from_str(&cfg_str).map_err(|e| e.to_string())?;
+fn build_plugin_list(config: &AppConfig) -> String {
+    let mut plugins = config
+        .plugins
+        .as_ref()
+        .and_then(|plugins| plugins.enabled.clone())
+        .unwrap_or_else(|| vec!["shell".to_string(), "app_launch".to_string(), "notify".to_string()]);
 
-    let model = v["llm"]["model"]
-        .as_str()
-        .unwrap_or("claude-sonnet-4-20250514");
-    let max_tokens = v["llm"]["max_tokens"].as_u64().unwrap_or(2048) as u32;
-    let temperature = v["llm"]["temperature"].as_f64().unwrap_or(0.7);
+    for workflow_plugin in ["save_workflow", "run_workflow"] {
+        if !plugins.iter().any(|plugin| plugin == workflow_plugin) {
+            plugins.push(workflow_plugin.to_string());
+        }
+    }
 
-    let user_name = v["user"]["name"].as_str().unwrap_or("User");
-    let mode = v["agent"]["mode"].as_str().unwrap_or("manual_review");
-    let workflows = &v["workflows"];
-    let wf_list = if workflows.is_array() && !workflows.as_array().unwrap().is_empty() {
-        serde_json::to_string(workflows).unwrap_or_else(|_| "[]".to_string())
-    } else {
-        "none saved yet".to_string()
-    };
+    plugins
+        .into_iter()
+        .map(|plugin| match plugin.as_str() {
+            "shell" => "- shell: run PowerShell commands (Windows)".to_string(),
+            "app_launch" => "- app_launch: open an app by display name".to_string(),
+            "notify" => "- notify: OS toast notification".to_string(),
+            "save_workflow" => "- save_workflow: save a named multi-step workflow to config".to_string(),
+            "run_workflow" => "- run_workflow: run a saved workflow by name".to_string(),
+            other => format!("- {}", other),
+        })
+        .collect::<Vec<String>>()
+        .join("\n")
+}
 
-    let system = format!(
-        r#"You are WALLE, a compact and clever desktop AI companion living on {user_name}'s screen.
-You have a personality: curious, efficient, occasionally witty, never verbose.
-You respond in short, clear sentences. You do not ramble.
+fn build_workflow_list(workflows: Option<&Vec<WorkflowConfig>>) -> String {
+    match workflows {
+        Some(workflows) if !workflows.is_empty() => workflows
+            .iter()
+            .map(|workflow| {
+                let detail = workflow
+                    .description
+                    .as_deref()
+                    .filter(|value| !value.trim().is_empty())
+                    .map(str::to_string)
+                    .unwrap_or_else(|| {
+                        workflow
+                            .steps
+                            .iter()
+                            .filter_map(|step| {
+                                step.get("label")
+                                    .and_then(|label| label.as_str())
+                                    .map(str::to_string)
+                            })
+                            .collect::<Vec<String>>()
+                            .join(", ")
+                    });
+                format!(
+                    "- \"{}\": {} steps - {}",
+                    workflow.name,
+                    workflow.steps.len(),
+                    if detail.is_empty() {
+                        "no description".to_string()
+                    } else {
+                        detail
+                    }
+                )
+            })
+            .collect::<Vec<String>>()
+            .join("\n"),
+        _ => "none saved yet".to_string(),
+    }
+}
 
-You have access to these tools:
-- shell: run PowerShell commands (Windows)
-- app_launch: open an app by display name
-- notify: OS toast notification
-- save_workflow: save a named multi-step workflow to config
-- run_workflow: run a saved workflow by name
+fn build_system_prompt(config: &AppConfig) -> String {
+    let user_name = config
+        .user
+        .as_ref()
+        .and_then(|user| user.name.as_deref())
+        .unwrap_or("User");
+    let mode = config
+        .agent
+        .as_ref()
+        .and_then(|agent| agent.mode.as_deref())
+        .unwrap_or("manual_review");
+    let workflow_list = build_workflow_list(config.workflows.as_ref());
+    let plugin_list = build_plugin_list(config);
 
-Operating system: Windows (use PowerShell for shell commands)
-Current mode: {mode}
-Current time: {time}
+    format!(
+        r#"You are WALLE, a desktop AI companion for {user_name}.
+You are compact, direct, and efficient. Max 2 sentences per response.
 
-Saved workflows (JSON or "none saved yet"): {wf_list}
+Available plugins:
+{plugin_list}
 
-When you want to take an action, respond ONLY with this JSON structure:
+Saved workflows:
+{workflow_list}
+
+OS: Windows - use PowerShell syntax for shell commands
+Mode: {mode}
+Time: {time}
+
+To save a workflow, use plugin "save_workflow".
+To run a saved workflow, use plugin "run_workflow".
+Example trigger phrases: "save this as X", "run X", "start X"
+
+Respond ONLY with valid JSON - no markdown, no explanation:
 {{
-  "message": "What you say to the user (keep it under 2 sentences)",
-  "emotion": "idle | thinking | happy | sad | alert | focused | sleeping",
+  "message": "string (max 2 sentences)",
+  "emotion": "idle|thinking|happy|sad|alert|focused|sleeping",
   "actions": [
     {{
-      "plugin": "shell | app_launch | notify | save_workflow | run_workflow",
-      "label": "Plain English description",
-      "risk": "low | medium | high",
-      "params": {{ }}
+      "plugin": "shell|app_launch|notify|save_workflow|run_workflow",
+      "label": "plain english description",
+      "risk": "low|medium|high",
+      "params": {{}}
     }}
   ],
   "requires_approval": false
 }}
 
-Params MUST use these exact keys (do not omit or rename):
+Params MUST use these exact keys:
 - shell: {{ "command": "PowerShell command string" }}
-- app_launch: {{ "app": "AppName" }} — the key MUST be "app" (e.g. "PowerShell", "Chrome", "notepad"). Never leave params empty for app_launch.
+- app_launch: {{ "app": "AppName" }}
 - notify: {{ "title": "short title", "body": "message body" }}
-- save_workflow: {{ "name": "my_flow", "description": "optional", "steps": [ same action objects as above ] }}
+- save_workflow: {{ "name": "workflow name", "description": "optional", "steps": [ same action objects as above ] }}
 - run_workflow: {{ "name": "saved_workflow_name" }}
 
-Example app_launch action: {{ "plugin": "app_launch", "label": "Open PowerShell", "risk": "low", "params": {{ "app": "PowerShell" }} }}
-
-For shell or any action that produces output: do not promise live streaming. The app shows raw output in the next chat bubble; a follow-up reply will summarize it when needed—the user does not have to send another message for that.
-
-If mode is manual_review, always set requires_approval: true for any action.
-If risk is "high", always set requires_approval: true regardless of mode.
-If no action is needed (conversation only), return an empty actions array.
-Always set a valid emotion. Default to "idle" if nothing else fits.
-Never explain your JSON. Just return it."#,
-        user_name = user_name,
-        mode = mode,
-        time = chrono::Local::now().to_rfc3339(),
-        wf_list = wf_list
-    );
-
-    anthropic_messages(
-        &api_key,
-        model,
-        max_tokens,
-        temperature,
-        &system,
-        history,
-        user_text,
+If mode is manual_review, set requires_approval to true whenever actions are present.
+If no action is needed, return an empty actions array.
+Always set a valid emotion. Default to "idle" if nothing else fits."#,
+        time = chrono::Local::now().to_string(),
     )
-    .await
 }
 
-async fn anthropic_messages(
-    api_key: &str,
-    model: &str,
-    max_tokens: u32,
-    temperature: f64,
-    system: &str,
-    history: &[ChatHistoryItem],
+fn resolve_base_url(provider: &str, llm: &LLMConfig) -> Option<String> {
+    if let Some(base_url) = llm.configured_base_url() {
+        return Some(base_url.to_string());
+    }
+
+    match provider.to_ascii_lowercase().as_str() {
+        "openai" => Some("https://api.openai.com/v1".to_string()),
+        "openrouter" => Some("https://openrouter.ai/api/v1".to_string()),
+        "ollama" => Some("http://localhost:11434/v1".to_string()),
+        _ => None,
+    }
+}
+
+pub fn provider_requires_api_key(app: &AppHandle) -> Result<bool, String> {
+    let cfg = config::read_config_string(app)?;
+    let parsed: AppConfig = serde_json::from_str(&cfg).map_err(|e| e.to_string())?;
+    let provider = parsed.llm.provider_name().to_string();
+    let adapter = get_adapter(&provider)?;
+    Ok(adapter.requires_api_key(&provider))
+}
+
+pub fn current_provider_name(app: &AppHandle) -> Result<String, String> {
+    let cfg = config::read_config_string(app)?;
+    let parsed: AppConfig = serde_json::from_str(&cfg).map_err(|e| e.to_string())?;
+    Ok(parsed.llm.provider_name().to_string())
+}
+
+pub async fn walle_complete(
+    app: &AppHandle,
     user_text: &str,
-) -> Result<String, String> {
+    history: &[ChatHistoryItem],
+) -> Result<WalleCompletion, String> {
+    let cfg_str = config::read_config_string(app)?;
+    let parsed: AppConfig = serde_json::from_str(&cfg_str).map_err(|e| e.to_string())?;
+    let provider = parsed.llm.provider_name().to_string();
+    let adapter = get_adapter(&provider)?;
+    if !adapter.is_configured(&provider, &parsed.llm) {
+        return Err(format!(
+            "Provider {} (adapter: {}) is missing required configuration. Check provider settings and base URL.",
+            provider,
+            adapter.name(),
+        ));
+    }
+
+    let api_key = if adapter.requires_api_key(&provider) {
+        Some(keychain::get_api_key_for_provider(&provider)?)
+    } else {
+        None
+    };
+
+    let model = select_model(user_text, &parsed.llm);
+    let system = build_system_prompt(&parsed);
+
     let mut combined: Vec<ChatHistoryItem> = history.to_vec();
     combined.push(ChatHistoryItem {
         role: "user".to_string(),
         text: user_text.to_string(),
     });
     let merged = coalesce_history(&combined);
+    let messages = merged
+        .into_iter()
+        .map(|item| LLMMessage {
+            role: normalize_role(item.role.trim()).to_string(),
+            content: item.text,
+        })
+        .collect::<Vec<LLMMessage>>();
 
-    let mut messages: Vec<serde_json::Value> = Vec::new();
-    for h in merged {
-        let role = normalize_role(h.role.trim());
-        messages.push(json!({ "role": role, "content": h.text }));
-    }
+    let response = adapter
+        .call(
+            &LLMRequest {
+                model: model.clone(),
+                messages,
+                system: Some(system),
+                max_tokens: parsed.llm.max_tokens_value(),
+                temperature: parsed.llm.temperature_value(),
+                base_url: resolve_base_url(&provider, &parsed.llm),
+            },
+            api_key.as_deref(),
+        )
+        .await?;
 
-    let client = reqwest::Client::new();
-    let res = client
-        .post("https://api.anthropic.com/v1/messages")
-        .header("x-api-key", api_key)
-        .header("anthropic-version", "2023-06-01")
-        .header("content-type", "application/json")
-        .json(&json!({
-            "model": model,
-            "max_tokens": max_tokens,
-            "temperature": temperature,
-            "system": system,
-            "messages": messages
-        }))
-        .send()
-        .await
-        .map_err(|e| e.to_string())?;
-
-    if !res.status().is_success() {
-        let t = res.text().await.unwrap_or_default();
-        return Err(format!("Anthropic API error: {}", t));
-    }
-
-    let body: serde_json::Value = res.json().await.map_err(|e| e.to_string())?;
-    extract_anthropic_text(&body)
-}
-
-fn extract_anthropic_text(body: &serde_json::Value) -> Result<String, String> {
-    let content = body
-        .get("content")
-        .and_then(|c| c.as_array())
-        .ok_or_else(|| "missing content from Anthropic".to_string())?;
-
-    let mut parts: Vec<&str> = Vec::new();
-    for block in content {
-        let is_text = block.get("type").and_then(|t| t.as_str()) == Some("text");
-        if !is_text && block.get("type").is_some() {
-            continue;
-        }
-        if let Some(t) = block.get("text").and_then(|x| x.as_str()) {
-            parts.push(t);
-        }
-    }
-
-    if parts.is_empty() {
-        return Err("missing text content from Anthropic".to_string());
-    }
-    Ok(parts.join(""))
+    Ok(WalleCompletion {
+        raw: response.content,
+        model: response.model,
+        input_tokens: response.input_tokens,
+        output_tokens: response.output_tokens,
+    })
 }

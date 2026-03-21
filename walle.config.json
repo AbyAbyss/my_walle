@@ -4,9 +4,12 @@
   },
   "llm": {
     "provider": "anthropic",
-    "model": "claude-haiku-4-5-20251001",
+    "default_model": "claude-haiku-4-5-20251001",
+    "complex_model": "claude-sonnet-4-6",
+    "smart_routing": true,
+    "base_url": "",
     "api_key_env": "ANTHROPIC_API_KEY",
-    "max_tokens": 2048,
+    "max_tokens": 512,
     "temperature": 0.7
   },
   "agent": {
@@ -31,7 +34,8 @@
   "ui": {
     "theme": "dark-glass",
     "accent": "cyan",
-    "chat_side": "left"
+    "chat_side": "left",
+    "debug_mode": false
   },
   "plugins": {
     "enabled": ["shell", "app_launch", "notify"]

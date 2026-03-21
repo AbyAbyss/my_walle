@@ -1,4 +1,5 @@
 use serde_json::json;
+use serde::Deserialize;
 use tauri::AppHandle;
 
 use crate::config;
@@ -15,18 +16,74 @@ pub fn save_mascot_position(app: AppHandle, x: f64, y: f64) -> Result<(), String
 
 #[tauri::command]
 pub fn save_agent_mode(app: AppHandle, mode: String) -> Result<(), String> {
-    let p = config::config_path(&app)?;
-    config::ensure_config_exists(&app)?;
-    let text = std::fs::read_to_string(&p).map_err(|e| e.to_string())?;
-    let mut v: serde_json::Value = serde_json::from_str(&text).map_err(|e| e.to_string())?;
+    let mut v = config::read_config_json(&app)?;
     if !v["agent"].is_object() {
         v["agent"] = json!({});
     }
     v["agent"]["mode"] = json!(mode);
-    std::fs::write(
-        &p,
-        serde_json::to_string_pretty(&v).map_err(|e| e.to_string())?,
-    )
-    .map_err(|e| e.to_string())?;
-    Ok(())
+    config::write_config_json(&app, &v)
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SaveLlmSettingsPayload {
+    pub provider: String,
+    pub default_model: String,
+    pub complex_model: String,
+    #[serde(default)]
+    pub base_url: String,
+    pub smart_routing: bool,
+    #[serde(default)]
+    pub debug_mode: bool,
+}
+
+#[tauri::command]
+pub fn save_llm_settings(app: AppHandle, settings: SaveLlmSettingsPayload) -> Result<(), String> {
+    let mut v = config::read_config_json(&app)?;
+    if !v["llm"].is_object() {
+        v["llm"] = json!({});
+    }
+    v["llm"]["provider"] = json!(settings.provider);
+    v["llm"]["default_model"] = json!(settings.default_model);
+    v["llm"]["complex_model"] = json!(settings.complex_model);
+    v["llm"]["smart_routing"] = json!(settings.smart_routing);
+    v["llm"]["base_url"] = json!(settings.base_url);
+    if !v["ui"].is_object() {
+        v["ui"] = json!({});
+    }
+    v["ui"]["debug_mode"] = json!(settings.debug_mode);
+
+    if v["llm"].get("model").is_some() {
+        v["llm"].as_object_mut().unwrap().remove("model");
+    }
+
+    config::write_config_json(&app, &v)
+}
+
+#[tauri::command]
+pub fn save_workflow_to_config(app: AppHandle, workflow: serde_json::Value) -> Result<(), String> {
+    let name = workflow
+        .get("name")
+        .and_then(|n| n.as_str())
+        .map(str::trim)
+        .filter(|n| !n.is_empty())
+        .ok_or_else(|| "workflow name required".to_string())?;
+
+    let mut v = config::read_config_json(&app)?;
+    if !v["workflows"].is_array() {
+        v["workflows"] = json!([]);
+    }
+
+    let workflows = v["workflows"]
+        .as_array_mut()
+        .ok_or_else(|| "workflows key missing".to_string())?;
+    workflows.retain(|w| {
+        w.get("name")
+            .and_then(|existing| existing.as_str())
+            .map(|existing| !existing.eq_ignore_ascii_case(name))
+            .unwrap_or(true)
+    });
+    workflows.push(workflow);
+
+    config::write_config_json(&app, &v)
 }
