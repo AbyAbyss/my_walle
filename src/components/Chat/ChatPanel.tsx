@@ -69,14 +69,15 @@ function usageSummary(usage: LLMUsage | null) {
 
 export default function ChatPanel() {
   const messages = useWalleStore((s) => s.messages);
-  const pending = useWalleStore((s) => s.pendingActions);
+  const pendingAction = useWalleStore((s) => s.pendingAction);
+  const resolveApproval = useWalleStore((s) => s.resolveApproval);
   const isThinking = useWalleStore((s) => s.isThinking);
   const workflows = useWalleStore((s) => s.workflows);
   const lastUsedModel = useWalleStore((s) => s.lastUsedModel);
   const lastUsage = useWalleStore((s) => s.lastUsage);
   const setMode = useWalleStore((s) => s.setMode);
   const setWorkflows = useWalleStore((s) => s.setWorkflows);
-  const { sendMessage, approveAction, denyAction } = useWalle();
+  const { sendMessage } = useWalle();
   const [settings, setSettings] = useState(false);
   const [voiceTick, setVoiceTick] = useState(0);
   const [configSnapshot, setConfigSnapshot] = useState<ChatConfigSnapshot | null>(null);
@@ -124,7 +125,6 @@ export default function ChatPanel() {
     return () => u?.();
   }, []);
 
-  const first = pending[0];
   const debugMode = configSnapshot?.ui?.debug_mode === true;
   const userLevel = normalizeUserLevel(configSnapshot?.user_level);
 
@@ -197,13 +197,13 @@ export default function ChatPanel() {
 
       <MessageList messages={messages} />
 
-      {first && (
+      {pendingAction && (
         <div className="px-3 shrink-0">
           <ActionCard
-            action={first.action}
+            action={pendingAction}
             userLevel={userLevel}
-            onApprove={() => void approveAction(first.id)}
-            onDeny={() => void denyAction(first.id)}
+            onApprove={() => resolveApproval(true)}
+            onDeny={() => resolveApproval(false)}
           />
         </div>
       )}

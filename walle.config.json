@@ -19,7 +19,8 @@
     "mode": "manual_review",
     "auto_summarize_tool_output": true,
     "always_confirm_dangerous": true,
-    "always_confirm_moderate": true
+    "always_confirm_moderate": true,
+    "action_delay_ms": 600
   },
   "workflows": [],
   "mascot": {

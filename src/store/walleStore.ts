@@ -32,7 +32,9 @@ interface WalleStore {
   emotion: Emotion;
   isThinking: boolean;
   messages: ChatMessage[];
-  pendingActions: { action: WalleAction; id: string }[];
+  /** At most one action awaiting Allow/Deny — sequential multi-action plans use this. */
+  pendingAction: WalleAction | null;
+  approvalCallback: ((approved: boolean) => void) | null;
   workflows: Workflow[];
   lastUsedModel: string | null;
   lastUsage: LLMUsage | null;
@@ -40,8 +42,10 @@ interface WalleStore {
   setEmotion: (e: Emotion) => void;
   setThinking: (v: boolean) => void;
   addMessage: (m: Omit<ChatMessage, "id" | "at"> & { id?: string }) => void;
-  setPendingActions: (a: { action: WalleAction; id: string }[]) => void;
-  dequeueAction: (id: string) => void;
+  /** Blocks until Allow/Deny; clears pending when resolved. */
+  startApprovalFlow: (action: WalleAction, onResolved: (approved: boolean) => void) => void;
+  resolveApproval: (approved: boolean) => void;
+  clearApprovalUi: () => void;
   setWorkflows: (workflows: Workflow[]) => void;
   addWorkflow: (workflow: Workflow) => void;
   setLastUsedModel: (model: string | null) => void;
@@ -50,12 +54,13 @@ interface WalleStore {
   playAnimation: (animation: Animation) => void;
 }
 
-export const useWalleStore = create<WalleStore>((set) => ({
+export const useWalleStore = create<WalleStore>((set, get) => ({
   mode: "manual_review",
   emotion: "idle",
   isThinking: false,
   messages: [],
-  pendingActions: [],
+  pendingAction: null,
+  approvalCallback: null,
   workflows: [],
   lastUsedModel: null,
   lastUsage: null,
@@ -74,11 +79,16 @@ export const useWalleStore = create<WalleStore>((set) => ({
         },
       ],
     })),
-  setPendingActions: (pendingActions) => set({ pendingActions }),
-  dequeueAction: (id) =>
-    set((s) => ({
-      pendingActions: s.pendingActions.filter((p) => p.id !== id),
-    })),
+  startApprovalFlow: (action, onResolved) =>
+    set({ pendingAction: action, approvalCallback: onResolved }),
+  resolveApproval: (approved) => {
+    const cb = get().approvalCallback;
+    if (cb) {
+      cb(approved);
+      set({ pendingAction: null, approvalCallback: null });
+    }
+  },
+  clearApprovalUi: () => set({ pendingAction: null, approvalCallback: null }),
   setWorkflows: (workflows) => set({ workflows }),
   addWorkflow: (workflow) =>
     set((s) => ({

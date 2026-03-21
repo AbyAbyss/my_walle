@@ -6,7 +6,7 @@ import {
   buildHistoryForFollowUp,
   TOOL_FOLLOWUP_USER_TEXT,
 } from "../lib/chatHistory";
-import type { WalleAction } from "../lib/actionParser";
+import type { WalleAction, WallePlan } from "../lib/actionParser";
 import { parsePlan } from "../lib/actionParser";
 import { formatPluginResult } from "../lib/pluginResultFormat";
 import type { Emotion } from "../lib/emotion";
@@ -77,6 +77,27 @@ async function getAutoSummarizeEnabled(): Promise<boolean> {
   } catch {
     return true;
   }
+}
+
+async function getActionDelayMs(): Promise<number> {
+  try {
+    const raw = await invoke<string>("get_walle_config");
+    const j = JSON.parse(raw) as { agent?: { action_delay_ms?: number } };
+    const ms = j.agent?.action_delay_ms;
+    return typeof ms === "number" && Number.isFinite(ms) && ms >= 0 ? ms : 600;
+  } catch {
+    return 600;
+  }
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function waitForUserApproval(action: WalleAction): Promise<boolean> {
+  return new Promise((resolve) => {
+    useWalleStore.getState().startApprovalFlow(action, resolve);
+  });
 }
 
 /** Second LLM turn after shell/workflow output; does not execute actions from the response. */
@@ -160,6 +181,61 @@ async function runPluginActionWithResult(action: WalleAction): Promise<boolean> 
   }
 }
 
+async function executeActionPlan(plan: WallePlan, mode: "auto" | "manual_review") {
+  const store = useWalleStore.getState();
+  const actions = plan.actions;
+  if (!actions.length) return;
+
+  const delayMs = await getActionDelayMs();
+  let autoBatchSummarize = false;
+
+  for (let i = 0; i < actions.length; i++) {
+    const action = actions[i];
+    const needApproval = plan.requires_approval || needsApproval(action, mode);
+
+    if (needApproval) {
+      if (autoBatchSummarize && (await getAutoSummarizeEnabled())) {
+        await appendToolFollowUpSummary();
+        autoBatchSummarize = false;
+      }
+      await emitMascotEmotion("thinking");
+      const approved = await waitForUserApproval(action);
+      if (!approved) {
+        store.addMessage({
+          role: "assistant",
+          text: `Skipped: ${action.label}`,
+        });
+        await emitMascotEmotion("sad");
+        if (i < actions.length - 1) await delay(delayMs);
+        continue;
+      }
+    }
+
+    // Match prior approveAction: show thinking while executing after Allow
+    if (needApproval) {
+      await emitMascotEmotion("thinking");
+    }
+
+    const ranSummarizable = await runPluginActionWithResult(action);
+
+    if (needApproval) {
+      if (ranSummarizable && (await getAutoSummarizeEnabled())) {
+        await appendToolFollowUpSummary();
+      } else {
+        await emitMascotEmotion("happy");
+      }
+    } else if (ranSummarizable) {
+      autoBatchSummarize = true;
+    }
+
+    if (i < actions.length - 1) await delay(delayMs);
+  }
+
+  if (autoBatchSummarize && (await getAutoSummarizeEnabled())) {
+    await appendToolFollowUpSummary();
+  }
+}
+
 export function useWalle() {
   const sendMessage = async (text: string) => {
     const store = useWalleStore.getState();
@@ -191,65 +267,18 @@ export function useWalle() {
       await emitMascotEmotion(plan.emotion);
 
       const mode = store.mode;
-      const pending: { action: WalleAction; id: string }[] = [];
-      let ranSummarizableTool = false;
-      for (const action of plan.actions) {
-        const need = plan.requires_approval || needsApproval(action, mode);
-        if (need) {
-          pending.push({ action, id: crypto.randomUUID() });
-        } else {
-          if (await runPluginActionWithResult(action)) {
-            ranSummarizableTool = true;
-          }
-        }
-      }
-      store.setPendingActions(pending);
-
-      if (ranSummarizableTool && (await getAutoSummarizeEnabled())) {
-        await appendToolFollowUpSummary();
-      }
+      await executeActionPlan(plan, mode);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       store.addMessage({ role: "assistant", text: `Error: ${msg}` });
       await emitMascotEmotion("sad");
     } finally {
+      useWalleStore.getState().clearApprovalUi();
       store.setThinking(false);
     }
-  };
-
-  const approveAction = async (id: string) => {
-    const store = useWalleStore.getState();
-    const item = store.pendingActions.find((p) => p.id === id);
-    if (!item) return;
-    store.setThinking(true);
-    try {
-      await emitMascotEmotion("thinking");
-      const ranSummarizableTool = await runPluginActionWithResult(item.action);
-      store.dequeueAction(id);
-
-      if (ranSummarizableTool && (await getAutoSummarizeEnabled())) {
-        await appendToolFollowUpSummary();
-      } else {
-        await emitMascotEmotion("happy");
-      }
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      store.addMessage({ role: "assistant", text: `Action failed: ${msg}` });
-      await emitMascotEmotion("sad");
-      store.dequeueAction(id);
-    } finally {
-      store.setThinking(false);
-    }
-  };
-
-  const denyAction = async (id: string) => {
-    useWalleStore.getState().dequeueAction(id);
-    await emitMascotEmotion("sad");
   };
 
   return {
     sendMessage,
-    approveAction,
-    denyAction,
   };
 }

@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use serde::Deserialize;
 use serde_json::json;
 use tauri::AppHandle;
@@ -118,6 +120,13 @@ fn save_workflow_impl(app: &AppHandle, params: &serde_json::Value) -> Result<(),
     config::write_config_json(app, &v)
 }
 
+fn action_delay_ms(app: &AppHandle) -> u64 {
+    config::read_config_json(app)
+        .ok()
+        .and_then(|v| v.get("agent")?.get("action_delay_ms")?.as_u64())
+        .unwrap_or(600)
+}
+
 async fn run_workflow_impl(app: &AppHandle, params: &serde_json::Value) -> Result<String, String> {
     let name = params
         .get("name")
@@ -136,8 +145,10 @@ async fn run_workflow_impl(app: &AppHandle, params: &serde_json::Value) -> Resul
         })
         .ok_or_else(|| format!("workflow '{}' not found", name))?;
     let steps = wf["steps"].as_array().ok_or_else(|| "invalid workflow steps".to_string())?;
+    let delay_ms = action_delay_ms(app);
+    let n = steps.len();
     let mut lines = Vec::new();
-    for step in steps {
+    for (idx, step) in steps.iter().enumerate() {
         let plugin = step["plugin"].as_str().unwrap_or("").to_string();
         let label = step["label"].as_str().unwrap_or("").to_string();
         let pparams = step["params"].clone();
@@ -151,11 +162,17 @@ async fn run_workflow_impl(app: &AppHandle, params: &serde_json::Value) -> Resul
                 "{} FAILED: nested run_workflow not supported",
                 label
             ));
+            if idx + 1 < n {
+                tokio::time::sleep(Duration::from_millis(delay_ms)).await;
+            }
             continue;
         }
         match dispatch_simple_plugin(app, action).await {
             Ok(j) => lines.push(format!("{}: {}", label, j)),
             Err(e) => lines.push(format!("{} FAILED: {}", label, e)),
+        }
+        if idx + 1 < n {
+            tokio::time::sleep(Duration::from_millis(delay_ms)).await;
         }
     }
     Ok(lines.join("\n"))
