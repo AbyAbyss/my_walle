@@ -108,6 +108,26 @@ pub fn create_chat_window(app: &AppHandle, visible: bool) -> Result<(), String> 
     Ok(())
 }
 
+/// Settings: glass panel, hidden until opened from chat.
+pub fn create_settings_window(app: &AppHandle) -> Result<(), String> {
+    if app.get_webview_window("settings").is_some() {
+        return Ok(());
+    }
+    WebviewWindowBuilder::new(app, "settings", WebviewUrl::App("settings.html".into()))
+        .transparent(true)
+        .decorations(false)
+        .always_on_top(true)
+        .skip_taskbar(true)
+        .resizable(false)
+        .inner_size(720.0, 780.0)
+        .visible(false)
+        .center()
+        .shadow(false)
+        .build()
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
 pub fn toggle_chat_visibility(app: &AppHandle) -> Result<bool, String> {
     if app.get_webview_window("chat").is_none() {
         create_chat_window(app, false)?;

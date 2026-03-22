@@ -42,5 +42,6 @@ pub fn complete_setup_flow(app: AppHandle) -> Result<(), String> {
     }
     windows::create_mascot_window(&app)?;
     windows::create_chat_window(&app, false)?;
+    windows::create_settings_window(&app)?;
     Ok(())
 }

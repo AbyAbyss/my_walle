@@ -2,7 +2,7 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
   "description": "WALLE windows — mascot, setup, chat",
-  "windows": ["mascot", "setup", "chat"],
+  "windows": ["mascot", "setup", "chat", "settings"],
   "permissions": [
     "core:default",
     "opener:default",
@@ -28,6 +28,8 @@
     "allow-complete-setup-flow",
     "allow-walle-chat",
     "allow-toggle-chat-window",
+    "allow-open-settings-window",
+    "core:event:allow-emit",
     "allow-shell-run",
     "allow-launch-app",
     "allow-send-notify",

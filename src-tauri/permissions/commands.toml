@@ -35,6 +35,10 @@ identifier = "allow-toggle-chat-window"
 commands.allow = ["toggle_chat_window"]
 
 [[permission]]
+identifier = "allow-open-settings-window"
+commands.allow = ["open_settings_window"]
+
+[[permission]]
 identifier = "allow-shell-run"
 commands.allow = ["shell_run"]
 

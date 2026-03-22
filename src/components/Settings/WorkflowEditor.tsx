@@ -18,6 +18,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { invoke } from "@tauri-apps/api/core";
 import { useCallback, useState } from "react";
 
+import { InlineConfirmDialog } from "./InlineConfirmDialog";
 import type { WalleAction } from "../../lib/actionParser";
 import { effectiveRisk } from "../../lib/riskClassifier";
 import type { Workflow } from "../../store/walleStore";
@@ -449,6 +450,8 @@ interface WorkflowEditorProps {
   onWorkflowsChange: (next: Workflow[]) => void;
   onRun: (name: string) => void;
   onStatus: (msg: string) => void;
+  /** Called after workflows are persisted to config (e.g. notify chat webview). */
+  onAfterPersist?: () => void;
 }
 
 export default function WorkflowEditor({
@@ -456,10 +459,12 @@ export default function WorkflowEditor({
   onWorkflowsChange,
   onRun,
   onStatus,
+  onAfterPersist,
 }: WorkflowEditorProps) {
   const [openIdx, setOpenIdx] = useState<number | null>(0);
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState("");
+  const [deleteIdx, setDeleteIdx] = useState<number | null>(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
@@ -474,11 +479,12 @@ export default function WorkflowEditor({
         });
         onWorkflowsChange(next);
         onStatus("Workflows saved.");
+        onAfterPersist?.();
       } catch (e) {
         onStatus(String(e));
       }
     },
-    [onWorkflowsChange, onStatus],
+    [onWorkflowsChange, onStatus, onAfterPersist],
   );
 
   const updateWorkflow = (idx: number, wf: Workflow) => {
@@ -486,11 +492,17 @@ export default function WorkflowEditor({
     void persist(next);
   };
 
-  const removeWorkflow = (idx: number) => {
-    if (!window.confirm(`Delete workflow “${workflows[idx].name}”?`)) return;
+  const confirmRemoveWorkflow = () => {
+    if (deleteIdx === null) return;
+    const idx = deleteIdx;
+    setDeleteIdx(null);
     const next = workflows.filter((_, i) => i !== idx);
     void persist(next);
     setOpenIdx(null);
+  };
+
+  const requestRemoveWorkflow = (idx: number) => {
+    setDeleteIdx(idx);
   };
 
   const addWorkflow = () => {
@@ -530,7 +542,14 @@ export default function WorkflowEditor({
   };
 
   return (
-    <div className="grid gap-4">
+    <div className="grid gap-4" style={{ position: "relative" }}>
+      {deleteIdx !== null && workflows[deleteIdx] && (
+        <InlineConfirmDialog
+          message={`Delete workflow “${workflows[deleteIdx].name}”?`}
+          onConfirm={() => void confirmRemoveWorkflow()}
+          onCancel={() => setDeleteIdx(null)}
+        />
+      )}
       <section style={sectionStyle}>
         <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
           <div
@@ -622,7 +641,7 @@ export default function WorkflowEditor({
                         type="button"
                         className="text-[11px] px-2 py-1 rounded-lg"
                         style={{ color: "var(--walle-text-muted)" }}
-                        onClick={() => removeWorkflow(wfIdx)}
+                        onClick={() => requestRemoveWorkflow(wfIdx)}
                       >
                         Delete
                       </button>

@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { useWalle } from "../../hooks/useWalle";
 import { useWalleContext } from "../../hooks/useWalleContext";
@@ -10,8 +10,9 @@ import {
   conversationRowsToMessages,
   type ConversationRowPayload,
 } from "../../lib/persistConversation";
+import { normalizeWorkflowsFromConfig } from "../../lib/workflowsFromConfig";
 import { normalizeUserLevel, saveUiPreferences } from "../../lib/uiPreferences";
-import type { LLMUsage, Workflow } from "../../store/walleStore";
+import type { LLMUsage } from "../../store/walleStore";
 import { useWalleStore } from "../../store/walleStore";
 import OnboardingFlow from "../Onboarding/OnboardingFlow";
 import ActionCard from "./ActionCard";
@@ -20,7 +21,6 @@ import MessageList from "./MessageList";
 import SuggestionChips from "./SuggestionChips";
 import ShowWorkPanel from "./ShowWorkPanel";
 import ModeToggle from "../UI/ModeToggle";
-import SettingsPanel from "./SettingsPanel";
 import { WorkflowPills } from "./WorkflowPills";
 
 interface WorkflowConfigItem {
@@ -61,25 +61,6 @@ function modelIndicatorLabel(lastUsedModel: string | null, config: ChatConfigSna
   return `${provider} / ${shortenModelName(lastUsedModel)}`;
 }
 
-function withStepUiIds(steps: Workflow["steps"]): Workflow["steps"] {
-  return steps.map((s) => {
-    const p = { ...(s.params as Record<string, unknown>) };
-    if (!p._uiId) p._uiId = crypto.randomUUID();
-    return { ...s, params: p };
-  });
-}
-
-function normalizeWorkflows(config: ChatConfigSnapshot): Workflow[] {
-  return (config.workflows ?? []).map((workflow) => ({
-    name: workflow.name,
-    description: workflow.description,
-    steps: Array.isArray(workflow.steps)
-      ? withStepUiIds(workflow.steps as Workflow["steps"])
-      : [],
-    created_at: workflow.created_at ?? new Date().toISOString(),
-  }));
-}
-
 function usageSummary(usage: LLMUsage | null) {
   if (!usage) return null;
   const total = usage.inputTokens + usage.outputTokens;
@@ -100,14 +81,13 @@ export default function ChatPanel() {
   const setShowWorkEnabled = useWalleStore((s) => s.setShowWorkEnabled);
   const { sendMessage } = useWalle();
   const { refresh: refreshContext } = useWalleContext();
-  const [settings, setSettings] = useState(false);
   const [voiceTick, setVoiceTick] = useState(0);
   const [configSnapshot, setConfigSnapshot] = useState<ChatConfigSnapshot | null>(null);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const firstOpenWaveRef = useRef(false);
   const restoredChatRef = useRef(false);
 
-  const loadConfig = async () => {
+  const loadConfig = useCallback(async () => {
     try {
       const raw = await invoke<string>("get_walle_config");
       const parsed = JSON.parse(raw) as ChatConfigSnapshot;
@@ -115,7 +95,7 @@ export default function ChatPanel() {
       if (mode === "auto" || mode === "manual_review") {
         setMode(mode);
       }
-      setWorkflows(normalizeWorkflows(parsed));
+      setWorkflows(normalizeWorkflowsFromConfig(parsed));
       setConfigSnapshot(parsed);
       setShowWorkEnabled(parsed.show_work === true);
       setShowOnboarding(parsed.onboarding_complete === false);
@@ -133,11 +113,11 @@ export default function ChatPanel() {
     } catch {
       /* ignore */
     }
-  };
+  }, [setMode, setWorkflows, setShowWorkEnabled]);
 
   useEffect(() => {
     void loadConfig();
-  }, [setMode, setWorkflows, setShowWorkEnabled]);
+  }, [loadConfig]);
 
   useEffect(() => {
     void refreshContext();
@@ -180,6 +160,27 @@ export default function ChatPanel() {
     })().catch(console.error);
     return () => u?.();
   }, []);
+
+  useEffect(() => {
+    let u: (() => void) | undefined;
+    (async () => {
+      u = await listen("walle/config-changed", () => {
+        void loadConfig();
+      });
+    })().catch(console.error);
+    return () => u?.();
+  }, [loadConfig]);
+
+  useEffect(() => {
+    let u: (() => void) | undefined;
+    (async () => {
+      u = await listen<{ name: string }>("walle/run-workflow", (ev) => {
+        const name = ev.payload?.name;
+        if (name) void sendMessage(`run ${name}`);
+      });
+    })().catch(console.error);
+    return () => u?.();
+  }, [sendMessage]);
 
   useEffect(() => {
     let u: (() => void) | undefined;
@@ -243,7 +244,7 @@ export default function ChatPanel() {
             type="button"
             className="text-[13px] px-2 py-1 rounded"
             style={{ color: "var(--walle-text-secondary)" }}
-            onClick={() => setSettings(true)}
+            onClick={() => void invoke("open_settings_window")}
           >
             ⚙
           </button>
@@ -297,15 +298,6 @@ export default function ChatPanel() {
           voiceTrigger={voiceTick}
         />
       </div>
-
-      <SettingsPanel
-        open={settings}
-        onClose={() => setSettings(false)}
-        onSaved={() => void loadConfig()}
-        workflows={workflows}
-        onWorkflowsChange={(next) => setWorkflows(next)}
-        onRunWorkflow={(name) => void sendMessage(`run ${name}`)}
-      />
 
       {showOnboarding && (
         <OnboardingFlow

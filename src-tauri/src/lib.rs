@@ -32,6 +32,7 @@ pub fn run() {
             } else {
                 windows::create_mascot_window(&handle)?;
                 windows::create_chat_window(&handle, false)?;
+                windows::create_settings_window(&handle)?;
             }
 
             #[cfg(desktop)]
@@ -53,6 +54,7 @@ pub fn run() {
             commands::complete_setup_flow,
             commands::walle_chat,
             commands::toggle_chat_window,
+            commands::open_settings_window,
             commands::shell_run,
             commands::launch_app,
             commands::send_notify,

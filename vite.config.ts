@@ -19,6 +19,7 @@ export default defineConfig(async () => ({
         mascot: resolve(__dirname, "mascot.html"),
         setup: resolve(__dirname, "setup.html"),
         chat: resolve(__dirname, "chat.html"),
+        settings: resolve(__dirname, "settings.html"),
       },
     },
   },
