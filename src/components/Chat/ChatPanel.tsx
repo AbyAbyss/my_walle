@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
+import { emit, listen } from "@tauri-apps/api/event";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { useMultiAgent } from "../../hooks/useMultiAgent";
@@ -13,6 +13,7 @@ import {
 } from "../../lib/persistConversation";
 import { normalizeWorkflowsFromConfig } from "../../lib/workflowsFromConfig";
 import { commandSummaryForTrust, fetchTrustForAction, type TrustScoreRow } from "../../lib/trustScore";
+import { emitMascotBubbleTrigger } from "../../lib/mascotBridge";
 import { normalizeUserLevel, saveUiPreferences } from "../../lib/uiPreferences";
 import type { LLMUsage } from "../../store/walleStore";
 import { useWalleStore } from "../../store/walleStore";
@@ -80,7 +81,9 @@ export default function ChatPanel() {
   const setMode = useWalleStore((s) => s.setMode);
   const setWorkflows = useWalleStore((s) => s.setWorkflows);
   const setMessages = useWalleStore((s) => s.setMessages);
+  const addMessage = useWalleStore((s) => s.addMessage);
   const setShowWorkEnabled = useWalleStore((s) => s.setShowWorkEnabled);
+  const addBubbleEcho = useWalleStore((s) => s.addBubbleEcho);
   const { sendMessage } = useWalle();
   const { chainRows } = useMultiAgent();
   const { refresh: refreshContext } = useWalleContext();
@@ -111,11 +114,15 @@ export default function ChatPanel() {
       const today = new Date().toDateString();
       if (!firstOpenWaveRef.current && parsed.last_open_date !== today) {
         firstOpenWaveRef.current = true;
+        void emit("walle/session-first-open-today");
         await saveUiPreferences({ last_open_date: today });
         if (parsed.onboarding_complete !== false) {
           window.setTimeout(() => {
             useWalleStore.getState().playAnimation("wave");
           }, 500);
+          window.setTimeout(() => {
+            void emitMascotBubbleTrigger("first_open_today");
+          }, 1800);
         }
       }
     } catch {
@@ -126,6 +133,23 @@ export default function ChatPanel() {
   useEffect(() => {
     void loadConfig();
   }, [loadConfig]);
+
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    void listen<{ text: string }>("walle/bubble-echo", (ev) => {
+      const text = ev.payload?.text;
+      if (typeof text !== "string") return;
+      addMessage({ role: "bubble_echo", text });
+      addBubbleEcho(text);
+    })
+      .then((fn) => {
+        unlisten = fn;
+      })
+      .catch(() => {});
+    return () => {
+      unlisten?.();
+    };
+  }, [addMessage, addBubbleEcho]);
 
   useEffect(() => {
     if (!pendingAction) {

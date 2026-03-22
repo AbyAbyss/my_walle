@@ -3,6 +3,16 @@ import type { ChatMessage } from "../store/walleStore";
 const MAX_HISTORY_MESSAGES = 20;
 const MAX_CHARS_PER_MESSAGE = 4000;
 
+/** Unprompted mascot bubble echoes must not reach the LLM. */
+function excludeBubbleEcho(
+  messages: ChatMessage[],
+): (ChatMessage & { role: "user" | "assistant" })[] {
+  return messages.filter(
+    (m): m is ChatMessage & { role: "user" | "assistant" } =>
+      m.role === "user" || m.role === "assistant",
+  );
+}
+
 export type ChatHistoryPayloadItem = {
   role: "user" | "assistant";
   text: string;
@@ -10,7 +20,8 @@ export type ChatHistoryPayloadItem = {
 
 /** Prior turns only (excludes the message just appended for this send). Truncated for API limits. */
 export function buildChatHistoryPayload(messages: ChatMessage[]): ChatHistoryPayloadItem[] {
-  const prior = messages.slice(0, -1);
+  const filtered = excludeBubbleEcho(messages);
+  const prior = filtered.slice(0, -1);
   const window = prior.slice(-MAX_HISTORY_MESSAGES);
   return window.map((m) => ({
     role: m.role,
@@ -31,7 +42,7 @@ function truncateMessageText(text: string): string {
  * Full recent transcript for post-tool follow-up (includes the latest assistant lines, e.g. shell **Result**).
  */
 export function buildHistoryForFollowUp(messages: ChatMessage[]): ChatHistoryPayloadItem[] {
-  const window = messages.slice(-MAX_HISTORY_MESSAGES);
+  const window = excludeBubbleEcho(messages).slice(-MAX_HISTORY_MESSAGES);
   return window.map((m) => ({
     role: m.role,
     text: truncateMessageText(m.text),
@@ -43,7 +54,7 @@ export const TOOL_FOLLOWUP_USER_TEXT = `[WALLE internal] The transcript above in
 
 /** Full recent transcript for multi-step agent continuation (includes latest tool lines). */
 export function buildChatHistoryForAgentContinue(messages: ChatMessage[]): ChatHistoryPayloadItem[] {
-  const window = messages.slice(-MAX_HISTORY_MESSAGES);
+  const window = excludeBubbleEcho(messages).slice(-MAX_HISTORY_MESSAGES);
   return window.map((m) => ({
     role: m.role,
     text: truncateMessageText(m.text),

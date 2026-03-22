@@ -8,13 +8,19 @@ import { notifyConfigChanged } from "../lib/settingsCrossWindow";
 import type { WalleAction } from "../lib/actionParser";
 import type { Memory } from "../lib/memory";
 
-export type ChatRole = "user" | "assistant";
+export type ChatRole = "user" | "assistant" | "bubble_echo";
 
 export interface ChatMessage {
   id: string;
   role: ChatRole;
   text: string;
   at: number;
+}
+
+/** Last 20 unprompted bubble lines echoed into chat (chat webview only). */
+export interface BubbleEcho {
+  text: string;
+  timestamp: string;
 }
 
 export interface Workflow {
@@ -90,6 +96,7 @@ interface WalleStore {
   emotion: Emotion;
   isThinking: boolean;
   messages: ChatMessage[];
+  bubbleEchos: BubbleEcho[];
   /** At most one action awaiting Allow/Deny — sequential multi-action plans use this. */
   pendingAction: WalleAction | null;
   approvalCallback: ((approved: boolean) => void) | null;
@@ -124,6 +131,7 @@ interface WalleStore {
   setEmotion: (e: Emotion) => void;
   setThinking: (v: boolean) => void;
   addMessage: (m: Omit<ChatMessage, "id" | "at"> & { id?: string }) => void;
+  addBubbleEcho: (text: string) => void;
   /** Replace chat (e.g. restore from SQLite). */
   setMessages: (messages: ChatMessage[]) => void;
   /** Blocks until Allow/Deny; clears pending when resolved. */
@@ -143,6 +151,7 @@ export const useWalleStore = create<WalleStore>((set, get) => ({
   emotion: "idle",
   isThinking: false,
   messages: [],
+  bubbleEchos: [],
   pendingAction: null,
   approvalCallback: null,
   workflows: [],
@@ -208,6 +217,13 @@ export const useWalleStore = create<WalleStore>((set, get) => ({
           text: m.text,
           at: Date.now(),
         },
+      ],
+    })),
+  addBubbleEcho: (text) =>
+    set((s) => ({
+      bubbleEchos: [
+        ...s.bubbleEchos.slice(-19),
+        { text, timestamp: new Date().toISOString() },
       ],
     })),
   setMessages: (messages) => set({ messages }),

@@ -8,6 +8,7 @@
     "build": "tsc && vite build",
     "build:linux": "tauri build --target x86_64-unknown-linux-gnu",
     "preview": "vite preview",
+    "test": "vitest run",
     "tauri": "tauri"
   },
   "dependencies": {
@@ -30,6 +31,7 @@
     "@types/react-dom": "^19.1.6",
     "@vitejs/plugin-react": "^4.6.0",
     "typescript": "~5.8.3",
-    "vite": "^7.0.4"
+    "vite": "^7.0.4",
+    "vitest": "^4.1.0"
   }
 }

@@ -1,20 +1,10 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { isChatVisible } from "../lib/chatVisibility";
 import type { Pattern } from "../lib/patternEngine";
 import { notifyConfigChanged } from "../lib/settingsCrossWindow";
-
-async function isChatVisible(): Promise<boolean> {
-  try {
-    const chat = await WebviewWindow.getByLabel("chat");
-    if (!chat) return false;
-    return await chat.isVisible();
-  } catch {
-    return false;
-  }
-}
 
 interface NudgePayload {
   kind: string;

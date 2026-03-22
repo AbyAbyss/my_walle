@@ -12,6 +12,10 @@ const host = process.env.TAURI_DEV_HOST;
 // https://vite.dev/config/
 export default defineConfig(async () => ({
   plugins: [tailwindcss(), react()],
+  test: {
+    environment: "node",
+    include: ["src/**/*.test.ts"],
+  },
   build: {
     rollupOptions: {
       input: {

@@ -466,3 +466,13 @@
   animation: duduRunHop 0.3s ease-in-out infinite !important;
   transform-origin: 110px 180px;
 }
+
+@keyframes walle-cursor-blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0;
+  }
+}

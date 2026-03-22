@@ -4,7 +4,9 @@ import { listen } from "@tauri-apps/api/event";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import ReactDOM from "react-dom/client";
 import EmotionEngine from "./components/Mascot/EmotionEngine";
+import { SpeechBubble } from "./components/Mascot/SpeechBubble";
 import SuggestionBubble from "./components/Suggestions/SuggestionBubble";
+import { useMascotSide, useSpeechBubble } from "./hooks/useSpeechBubble";
 import MascotWindow from "./windows/MascotWindow";
 import { useLearning } from "./hooks/useLearning";
 import type { Animation } from "./lib/animation";
@@ -95,6 +97,9 @@ function MascotRoot() {
     setAnimation("pet");
   }, [animation]);
 
+  const { activeMessage, dismissBubble } = useSpeechBubble({ animation });
+  const mascotSide = useMascotSide();
+
   const cycleDev = useCallback(() => {
     setEmotion((e) => {
       const i = EMOTIONS.indexOf(e);
@@ -115,7 +120,19 @@ function MascotRoot() {
 
   return (
     <MascotWindow emotion={emotion} animation={animation}>
-      <div style={{ position: "relative", width: "100%", height: "100%" }}>
+      <div
+        style={{
+          position: "relative",
+          width: "100%",
+          height: "100%",
+          overflow: "visible",
+        }}
+      >
+        <SpeechBubble
+          text={activeMessage}
+          onDismiss={dismissBubble}
+          mascotSide={mascotSide}
+        />
         <AnimatePresence>
           {pendingSuggestion && (
             <div

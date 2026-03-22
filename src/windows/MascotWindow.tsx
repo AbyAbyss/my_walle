@@ -94,6 +94,7 @@ export default function MascotWindow({ children, emotion, animation }: MascotWin
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
+          overflow: "visible",
           transform: `translate(${wander.x}px, ${wander.y}px)`,
           transition: "transform 2.5s cubic-bezier(0.45, 0, 0.55, 1)",
         }}

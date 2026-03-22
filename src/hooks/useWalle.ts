@@ -1,5 +1,4 @@
 import { invoke } from "@tauri-apps/api/core";
-import { emitTo } from "@tauri-apps/api/event";
 
 import {
   buildAgentContinueUserText,
@@ -11,10 +10,15 @@ import {
 import type { WalleAction, WallePlan } from "../lib/actionParser";
 import { parsePlan } from "../lib/actionParser";
 import { formatPluginResult } from "../lib/pluginResultFormat";
-import type { Emotion } from "../lib/emotion";
 import { needsApproval } from "../lib/riskClassifier";
 import { fetchTrustForAction } from "../lib/trustScore";
-import { emitMascotAnimation } from "../lib/mascotBridge";
+import { isChatVisible } from "../lib/chatVisibility";
+import {
+  emitMascotAnimation,
+  emitMascotBubbleLlm,
+  emitMascotBubbleTrigger,
+  emitMascotEmotion,
+} from "../lib/mascotBridge";
 import { fetchWalleContextForLlm } from "../lib/fetchContext";
 import {
   persistConversationLine,
@@ -62,10 +66,6 @@ function workflowFromAction(action: WalleAction): Workflow {
     steps,
     created_at: new Date().toISOString(),
   };
-}
-
-async function emitMascotEmotion(emotion: Emotion) {
-  await emitTo("mascot", "walle/emotion", { emotion });
 }
 
 function workflowSummaryOk(result: unknown): boolean {
@@ -244,7 +244,15 @@ interface ExecutePlanOptions {
   iteration?: { current: number; max: number };
 }
 
-async function runPluginActionWithResult(action: WalleAction, showWork: boolean): Promise<boolean> {
+interface PluginRunResult {
+  success: boolean;
+  summarizable: boolean;
+}
+
+async function runPluginActionWithResult(
+  action: WalleAction,
+  showWork: boolean,
+): Promise<PluginRunResult> {
   const store = useWalleStore.getState();
   const isWorkflow = action.plugin === "run_workflow";
   try {
@@ -260,7 +268,7 @@ async function runPluginActionWithResult(action: WalleAction, showWork: boolean)
       });
       void persistConversationLine("assistant", wfMsg, null);
       pushWork(showWork, "work:success", "Workflow saved", action.plugin);
-      return false;
+      return { success: true, summarizable: false };
     }
 
     pushWork(showWork, "work:action", `↳ ${actionSummaryLine(action)}`, action.plugin);
@@ -334,7 +342,8 @@ async function runPluginActionWithResult(action: WalleAction, showWork: boolean)
       await emitMascotAnimation("thumbs_up");
     }
 
-    return action.plugin === "shell" || action.plugin === "run_workflow";
+    const summarizable = action.plugin === "shell" || action.plugin === "run_workflow";
+    return { success: true, summarizable };
   } catch (e) {
     if (isWorkflow) {
       await emitMascotAnimation("none");
@@ -347,7 +356,7 @@ async function runPluginActionWithResult(action: WalleAction, showWork: boolean)
       text: failText,
     });
     void persistConversationLine("assistant", failText, null);
-    return false;
+    return { success: false, summarizable: false };
   }
 }
 
@@ -387,6 +396,7 @@ async function executeActionPlan(
   const delayMs = await getActionDelayMs();
   let autoBatchSummarize = false;
   let deferredSummary = false;
+  let anyActionFailed = false;
 
   const maybeAppendSummary = async () => {
     if (!(await getAutoSummarizeEnabled())) return;
@@ -428,7 +438,14 @@ async function executeActionPlan(
       await emitMascotEmotion("thinking");
     }
 
-    const ranSummarizable = await runPluginActionWithResult(action, showWork);
+    const runResult = await runPluginActionWithResult(action, showWork);
+    if (!runResult.success) {
+      if (!anyActionFailed) {
+        void emitMascotBubbleTrigger("task_failed");
+      }
+      anyActionFailed = true;
+    }
+    const ranSummarizable = runResult.summarizable;
 
     if (needApproval) {
       if (ranSummarizable && (await getAutoSummarizeEnabled())) {
@@ -456,6 +473,13 @@ async function executeActionPlan(
       showWork,
       "work:done",
       suppressAutoSummarize ? "Round complete." : "All done.",
+    );
+  }
+
+  const isFinalPlannerRound = !iteration || iteration.current === iteration.max;
+  if (!anyActionFailed && actions.length && isFinalPlannerRound) {
+    void emitMascotBubbleTrigger(
+      actions.length >= 3 ? "task_complete_multi" : "task_complete_single",
     );
   }
 
@@ -514,6 +538,9 @@ export function useWalle() {
         void persistConversationLine("assistant", plan.message, plan.emotion);
         store.setEmotion(plan.emotion);
         await emitMascotEmotion(plan.emotion);
+        if (!(await isChatVisible())) {
+          await emitMascotBubbleLlm(plan.message, plan.emotion);
+        }
 
         const mode = store.mode;
 
