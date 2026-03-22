@@ -42,6 +42,39 @@ export function formatPluginResult(plugin: string, result: unknown): string {
     }
     case "save_workflow":
       return "**Result** (save_workflow): Saved.";
+    case "schedule_create":
+      return "**Result** (schedule_create): Saved.";
+    case "schedule_list": {
+      const rows = o.schedules;
+      if (Array.isArray(rows)) {
+        return `**Result** (schedule_list): ${rows.length} schedule(s).`;
+      }
+      return "**Result** (schedule_list): (no list)";
+    }
+    case "schedule_delete": {
+      const n = o.deleted;
+      return `**Result** (schedule_delete): removed ${typeof n === "number" ? n : "?"} row(s).`;
+    }
+    case "git_status":
+    case "git_log":
+    case "git_diff":
+    case "git_commit":
+    case "git_push":
+    case "git_checkout": {
+      const out = String(o.stdout ?? "").trim();
+      return `**Result** (${plugin}):\n${truncateForDisplay(out || "(no output)")}`;
+    }
+    case "external":
+    case "ext_shell": {
+      const stdout = String(o.stdout ?? "");
+      const stderr = String(o.stderr ?? "");
+      const exit = o.exit_code;
+      const parts: string[] = [];
+      if (stdout) parts.push(`stdout:\n${truncateForDisplay(stdout)}`);
+      if (stderr) parts.push(`stderr:\n${truncateForDisplay(stderr)}`);
+      const body = parts.length > 0 ? parts.join("\n\n") : "(no output)";
+      return `**Result** (external shell, exit ${exit ?? "?"}):\n${body}`;
+    }
     default:
       return `**Result** (${plugin}):\n${truncateForDisplay(JSON.stringify(result, null, 2))}`;
   }

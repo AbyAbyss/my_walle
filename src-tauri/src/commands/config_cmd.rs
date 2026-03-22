@@ -61,6 +61,44 @@ pub fn save_llm_settings(app: AppHandle, settings: SaveLlmSettingsPayload) -> Re
 }
 
 #[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SaveContextSettingsPayload {
+    pub inject_active_window: bool,
+    pub inject_clipboard: bool,
+}
+
+#[tauri::command]
+pub fn save_context_settings(
+    app: AppHandle,
+    settings: SaveContextSettingsPayload,
+) -> Result<(), String> {
+    let mut v = config::read_config_json(&app)?;
+    if !v["context"].is_object() {
+        v["context"] = json!({});
+    }
+    v["context"]["inject_active_window"] = json!(settings.inject_active_window);
+    v["context"]["inject_clipboard"] = json!(settings.inject_clipboard);
+    config::write_config_json(&app, &v)
+}
+
+#[tauri::command]
+pub fn save_plugins_enabled(app: AppHandle, enabled: Vec<String>) -> Result<(), String> {
+    let mut v = config::read_config_json(&app)?;
+    if !v["plugins"].is_object() {
+        v["plugins"] = json!({});
+    }
+    v["plugins"]["enabled"] = json!(enabled);
+    config::write_config_json(&app, &v)
+}
+
+#[tauri::command]
+pub fn save_workflows_to_config(app: AppHandle, workflows: Vec<serde_json::Value>) -> Result<(), String> {
+    let mut v = config::read_config_json(&app)?;
+    v["workflows"] = json!(workflows);
+    config::write_config_json(&app, &v)
+}
+
+#[derive(Deserialize)]
 pub struct SaveUiPreferencesPayload {
     #[serde(default)]
     pub onboarding_complete: Option<bool>,
@@ -70,6 +108,8 @@ pub struct SaveUiPreferencesPayload {
     pub user_level: Option<String>,
     #[serde(default)]
     pub idle_wander: Option<bool>,
+    #[serde(default)]
+    pub show_work: Option<bool>,
 }
 
 #[tauri::command]
@@ -89,6 +129,9 @@ pub fn save_ui_preferences(app: AppHandle, prefs: SaveUiPreferencesPayload) -> R
             v["mascot"] = json!({});
         }
         v["mascot"]["idle_wander"] = json!(x);
+    }
+    if let Some(x) = prefs.show_work {
+        v["show_work"] = json!(x);
     }
     config::write_config_json(&app, &v)
 }

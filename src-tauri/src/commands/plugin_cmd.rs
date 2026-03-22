@@ -1,13 +1,129 @@
+use std::fs;
 use std::time::Duration;
 
 use serde::Deserialize;
 use serde_json::json;
+use sqlx::SqlitePool;
 use tauri::AppHandle;
+use tauri::Manager;
 
 use crate::commands::app_launch::launch_app;
+use crate::commands::git;
+use crate::commands::scheduler;
 use crate::commands::notify::{parse_notify_delay_secs, send_notify, spawn_delayed_notify};
 use crate::commands::shell::shell_run;
+use crate::commands::user_plugins::{self, ExternalManifestDto};
 use crate::config;
+
+fn is_builtin_plugin_enabled(app: &AppHandle, plugin: &str) -> Result<bool, String> {
+    const BUILTINS: &[&str] = &["shell", "app_launch", "notify"];
+    if !BUILTINS.contains(&plugin) {
+        return Ok(true);
+    }
+    let v = config::read_config_json(app)?;
+    let arr = v
+        .get("plugins")
+        .and_then(|p| p.get("enabled"))
+        .and_then(|e| e.as_array());
+    let Some(arr) = arr else {
+        return Ok(true);
+    };
+    let list: Vec<&str> = arr.iter().filter_map(|x| x.as_str()).collect();
+    if list.is_empty() {
+        return Ok(true);
+    }
+    Ok(list.iter().any(|&p| p == plugin))
+}
+
+fn assert_builtin_enabled(app: &AppHandle, plugin: &str) -> Result<(), String> {
+    if !is_builtin_plugin_enabled(app, plugin)? {
+        return Err(format!(
+            "The {plugin} plugin is disabled in Settings → Plugins"
+        ));
+    }
+    Ok(())
+}
+
+fn assert_git_plugins_allowed(app: &AppHandle) -> Result<(), String> {
+    let v = config::read_config_json(app)?;
+    let dev_on = v
+        .get("developer_mode")
+        .and_then(|d| d.get("enabled"))
+        .and_then(|x| x.as_bool())
+        .unwrap_or(false);
+    if !dev_on {
+        return Err("Git plugins require developer mode in config".into());
+    }
+    let arr = v
+        .get("plugins")
+        .and_then(|p| p.get("enabled"))
+        .and_then(|e| e.as_array());
+    let Some(arr) = arr else {
+        return Ok(());
+    };
+    let list: Vec<&str> = arr.iter().filter_map(|x| x.as_str()).collect();
+    if list.is_empty() {
+        return Ok(());
+    }
+    if !list.iter().any(|&p| p == "git") {
+        return Err("The git plugin is disabled in Settings → Plugins".into());
+    }
+    Ok(())
+}
+
+async fn plugin_external_run(app: &AppHandle, params: &serde_json::Value) -> Result<serde_json::Value, String> {
+    assert_builtin_enabled(app, "shell")?;
+    let plugin_id = params
+        .get("plugin_id")
+        .or_else(|| params.get("pluginId"))
+        .and_then(|v| v.as_str())
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .ok_or_else(|| "plugin_id required".to_string())?;
+    let command_name = params
+        .get("command")
+        .and_then(|v| v.as_str())
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .ok_or_else(|| "command required".to_string())?;
+    let root = user_plugins::user_plugins_dir(app)?;
+    let manifest_path = root.join(plugin_id).join("manifest.json");
+    let data = fs::read_to_string(&manifest_path).map_err(|e| e.to_string())?;
+    let m: ExternalManifestDto = serde_json::from_str(&data).map_err(|e| e.to_string())?;
+    let cdef = m
+        .commands
+        .iter()
+        .find(|c| c.name == command_name)
+        .ok_or_else(|| format!("unknown command '{command_name}' in plugin {plugin_id}"))?;
+    let tpl = cdef
+        .shell_template
+        .as_ref()
+        .ok_or_else(|| "manifest command has no shellTemplate".to_string())?;
+    let mut rendered = tpl.clone();
+    if let Some(obj) = params.as_object() {
+        for (k, v) in obj {
+            if matches!(k.as_str(), "plugin_id" | "pluginId" | "command") {
+                continue;
+            }
+            let val = match v {
+                serde_json::Value::String(s) => s.clone(),
+                serde_json::Value::Null => String::new(),
+                serde_json::Value::Number(n) => n.to_string(),
+                serde_json::Value::Bool(b) => b.to_string(),
+                other => other.to_string(),
+            };
+            let needle = "{".to_owned() + "{" + k + "}" + "}";
+            rendered = rendered.replace(&needle, &val);
+        }
+    }
+    let out = shell_run(rendered, None).await?;
+    Ok(json!({
+        "ok": true,
+        "stdout": out.stdout,
+        "stderr": out.stderr,
+        "exit_code": out.exit_code,
+    }))
+}
 
 /// Resolves the target app name from LLM output (`app` is canonical; `name` / `application` tolerated).
 fn app_name_from_params(params: &serde_json::Value) -> Option<String> {
@@ -34,6 +150,7 @@ pub struct PluginAction {
 async fn dispatch_simple_plugin(app: &AppHandle, action: PluginAction) -> Result<serde_json::Value, String> {
     match action.plugin.as_str() {
         "shell" => {
+            assert_builtin_enabled(app, "shell")?;
             let cmd = action
                 .params
                 .get("command")
@@ -48,12 +165,14 @@ async fn dispatch_simple_plugin(app: &AppHandle, action: PluginAction) -> Result
             }))
         }
         "app_launch" => {
+            assert_builtin_enabled(app, "app_launch")?;
             let name = app_name_from_params(&action.params)
                 .ok_or_else(|| "missing app".to_string())?;
             launch_app(name).await?;
             Ok(json!({ "ok": true }))
         }
         "notify" => {
+            assert_builtin_enabled(app, "notify")?;
             let title = action
                 .params
                 .get("title")
@@ -82,6 +201,31 @@ async fn dispatch_simple_plugin(app: &AppHandle, action: PluginAction) -> Result
             save_workflow_impl(app, &action.params)?;
             Ok(json!({ "ok": true }))
         }
+        "git_status" => {
+            assert_git_plugins_allowed(app)?;
+            git::plugin_git_status(&action.params).await
+        }
+        "git_log" => {
+            assert_git_plugins_allowed(app)?;
+            git::plugin_git_log(&action.params).await
+        }
+        "git_diff" => {
+            assert_git_plugins_allowed(app)?;
+            git::plugin_git_diff(&action.params).await
+        }
+        "git_commit" => {
+            assert_git_plugins_allowed(app)?;
+            git::plugin_git_commit(&action.params).await
+        }
+        "git_push" => {
+            assert_git_plugins_allowed(app)?;
+            git::plugin_git_push(&action.params).await
+        }
+        "git_checkout" => {
+            assert_git_plugins_allowed(app)?;
+            git::plugin_git_checkout(&action.params).await
+        }
+        "external" | "ext_shell" => plugin_external_run(app, &action.params).await,
         _ => Err(format!(
             "plugin {} not supported in this context",
             action.plugin
@@ -89,13 +233,71 @@ async fn dispatch_simple_plugin(app: &AppHandle, action: PluginAction) -> Result
     }
 }
 
+async fn plugin_schedule_create(
+    pool: &SqlitePool,
+    params: &serde_json::Value,
+) -> Result<serde_json::Value, String> {
+    let name = params
+        .get("name")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| "name required".to_string())?
+        .trim();
+    if name.is_empty() {
+        return Err("name required".into());
+    }
+    let cron_expr = params
+        .get("cron_expr")
+        .or_else(|| params.get("cronExpr"))
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| "cron_expr required".to_string())?;
+    scheduler::validate_cron(cron_expr)?;
+    let actions = params
+        .get("actions")
+        .ok_or_else(|| "actions required".to_string())?;
+    if !actions.is_array() {
+        return Err("actions must be a JSON array".into());
+    }
+    let actions_str = serde_json::to_string(actions).map_err(|e| e.to_string())?;
+    scheduler::insert_schedule(pool, name, cron_expr, &actions_str)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(json!({ "ok": true }))
+}
+
+async fn plugin_schedule_list(pool: &SqlitePool) -> Result<serde_json::Value, String> {
+    let rows = scheduler::list_schedules(pool).await?;
+    Ok(json!({ "ok": true, "schedules": rows }))
+}
+
+async fn plugin_schedule_delete(
+    pool: &SqlitePool,
+    params: &serde_json::Value,
+) -> Result<serde_json::Value, String> {
+    let id = params
+        .get("id")
+        .and_then(|v| v.as_i64())
+        .or_else(|| params.get("id").and_then(|v| v.as_u64()).map(|u| u as i64));
+    let name = params.get("name").and_then(|v| v.as_str());
+    let n = scheduler::delete_schedule_by_name_or_id(pool, name, id)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(json!({ "ok": true, "deleted": n }))
+}
+
 #[tauri::command]
 pub async fn run_plugin_action(app: AppHandle, action: PluginAction) -> Result<serde_json::Value, String> {
-    if action.plugin == "run_workflow" {
-        let summary = run_workflow_impl(&app, &action.params).await?;
-        return Ok(json!({ "ok": true, "summary": summary }));
+    let pool = app.state::<SqlitePool>();
+    match action.plugin.as_str() {
+        "schedule_create" => plugin_schedule_create(&pool, &action.params).await,
+        "schedule_list" => plugin_schedule_list(&pool).await,
+        "schedule_delete" => plugin_schedule_delete(&pool, &action.params).await,
+        "external" | "ext_shell" => plugin_external_run(&app, &action.params).await,
+        "run_workflow" => {
+            let summary = run_workflow_impl(&app, &action.params).await?;
+            Ok(json!({ "ok": true, "summary": summary }))
+        }
+        _ => dispatch_simple_plugin(&app, action).await,
     }
-    dispatch_simple_plugin(&app, action).await
 }
 
 fn save_workflow_impl(app: &AppHandle, params: &serde_json::Value) -> Result<(), String> {

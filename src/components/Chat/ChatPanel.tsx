@@ -3,6 +3,13 @@ import { listen } from "@tauri-apps/api/event";
 import { useEffect, useRef, useState } from "react";
 
 import { useWalle } from "../../hooks/useWalle";
+import { useWalleContext } from "../../hooks/useWalleContext";
+import { getChatSessionId } from "../../lib/chatSession";
+import { runScheduleFire, type ScheduleFirePayload } from "../../lib/runScheduleFire";
+import {
+  conversationRowsToMessages,
+  type ConversationRowPayload,
+} from "../../lib/persistConversation";
 import { normalizeUserLevel, saveUiPreferences } from "../../lib/uiPreferences";
 import type { LLMUsage, Workflow } from "../../store/walleStore";
 import { useWalleStore } from "../../store/walleStore";
@@ -11,6 +18,7 @@ import ActionCard from "./ActionCard";
 import InputBar from "./InputBar";
 import MessageList from "./MessageList";
 import SuggestionChips from "./SuggestionChips";
+import ShowWorkPanel from "./ShowWorkPanel";
 import ModeToggle from "../UI/ModeToggle";
 import SettingsPanel from "./SettingsPanel";
 import { WorkflowPills } from "./WorkflowPills";
@@ -26,6 +34,7 @@ interface ChatConfigSnapshot {
   onboarding_complete?: boolean;
   last_open_date?: string;
   user_level?: string;
+  show_work?: boolean;
   agent?: { mode?: string };
   llm?: {
     provider?: string;
@@ -52,11 +61,21 @@ function modelIndicatorLabel(lastUsedModel: string | null, config: ChatConfigSna
   return `${provider} / ${shortenModelName(lastUsedModel)}`;
 }
 
+function withStepUiIds(steps: Workflow["steps"]): Workflow["steps"] {
+  return steps.map((s) => {
+    const p = { ...(s.params as Record<string, unknown>) };
+    if (!p._uiId) p._uiId = crypto.randomUUID();
+    return { ...s, params: p };
+  });
+}
+
 function normalizeWorkflows(config: ChatConfigSnapshot): Workflow[] {
   return (config.workflows ?? []).map((workflow) => ({
     name: workflow.name,
     description: workflow.description,
-    steps: Array.isArray(workflow.steps) ? (workflow.steps as Workflow["steps"]) : [],
+    steps: Array.isArray(workflow.steps)
+      ? withStepUiIds(workflow.steps as Workflow["steps"])
+      : [],
     created_at: workflow.created_at ?? new Date().toISOString(),
   }));
 }
@@ -77,12 +96,15 @@ export default function ChatPanel() {
   const lastUsage = useWalleStore((s) => s.lastUsage);
   const setMode = useWalleStore((s) => s.setMode);
   const setWorkflows = useWalleStore((s) => s.setWorkflows);
+  const setMessages = useWalleStore((s) => s.setMessages);
   const { sendMessage } = useWalle();
+  const { refresh: refreshContext } = useWalleContext();
   const [settings, setSettings] = useState(false);
   const [voiceTick, setVoiceTick] = useState(0);
   const [configSnapshot, setConfigSnapshot] = useState<ChatConfigSnapshot | null>(null);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const firstOpenWaveRef = useRef(false);
+  const restoredChatRef = useRef(false);
 
   const loadConfig = async () => {
     try {
@@ -116,10 +138,60 @@ export default function ChatPanel() {
   }, [setMode, setWorkflows]);
 
   useEffect(() => {
+    void refreshContext();
+  }, [refreshContext]);
+
+  useEffect(() => {
+    if (restoredChatRef.current) return;
+    restoredChatRef.current = true;
+    void (async () => {
+      try {
+        const rows = await invoke<ConversationRowPayload[]>("conversation_load_recent", {
+          sessionId: getChatSessionId(),
+          limit: 20,
+        });
+        if (rows.length) {
+          setMessages(conversationRowsToMessages(rows));
+        }
+      } catch {
+        /* ignore */
+      }
+    })();
+  }, [setMessages]);
+
+  useEffect(() => {
     let u: (() => void) | undefined;
     (async () => {
       u = await listen("walle/voice-hotkey", () => {
         setVoiceTick((t) => t + 1);
+      });
+    })().catch(console.error);
+    return () => u?.();
+  }, []);
+
+  useEffect(() => {
+    let u: (() => void) | undefined;
+    (async () => {
+      u = await listen<ScheduleFirePayload>("schedule:fire", (ev) => {
+        void runScheduleFire(ev.payload);
+      });
+    })().catch(console.error);
+    return () => u?.();
+  }, []);
+
+  useEffect(() => {
+    let u: (() => void) | undefined;
+    (async () => {
+      u = await listen("walle/toggle-show-work", async () => {
+        try {
+          const raw = await invoke<string>("get_walle_config");
+          const j = JSON.parse(raw) as { show_work?: boolean };
+          await saveUiPreferences({ show_work: !(j.show_work === true) });
+          const next = await invoke<string>("get_walle_config");
+          setConfigSnapshot(JSON.parse(next) as ChatConfigSnapshot);
+        } catch {
+          /* ignore */
+        }
       });
     })().catch(console.error);
     return () => u?.();
@@ -197,6 +269,8 @@ export default function ChatPanel() {
 
       <MessageList messages={messages} />
 
+      <ShowWorkPanel enabled={configSnapshot?.show_work === true} />
+
       {pendingAction && (
         <div className="px-3 shrink-0">
           <ActionCard
@@ -224,6 +298,9 @@ export default function ChatPanel() {
         open={settings}
         onClose={() => setSettings(false)}
         onSaved={() => void loadConfig()}
+        workflows={workflows}
+        onWorkflowsChange={(next) => setWorkflows(next)}
+        onRunWorkflow={(name) => void sendMessage(`run ${name}`)}
       />
 
       {showOnboarding && (

@@ -17,3 +17,8 @@ commands.allow = ["save_workflow_to_config"]
 identifier = "allow-save-ui-preferences"
 description = "Allows persisting onboarding and UI preference keys to walle.config.json."
 commands.allow = ["save_ui_preferences"]
+
+[[permission]]
+identifier = "allow-save-context-settings"
+description = "Allows persisting context injection toggles to walle.config.json."
+commands.allow = ["save_context_settings"]

@@ -43,9 +43,19 @@ export const RISK_RULES: {
     reason: "Package installation",
   },
   {
-    patterns: [/git\s+(push|commit|merge|rebase|reset)/i],
+    patterns: [/git\s+push/i, /git\s+reset\s+--hard/i, /git\s+rebase/i],
+    level: "dangerous",
+    reason: "Destructive or remote git operation",
+  },
+  {
+    patterns: [/git\s+(commit|add|checkout|merge)/i],
     level: "moderate",
     reason: "Git state change",
+  },
+  {
+    patterns: [/git\s+(status|log|diff|branch|stash\s+list)/i],
+    level: "safe",
+    reason: "Read-only git operation",
   },
   {
     patterns: [/Move-Item|mv\s+|Copy-Item.*-Force/i],
@@ -76,6 +86,13 @@ function actionProbe(a: WalleAction): string {
   const p = a.params;
   if (a.plugin === "shell") return String(p.command ?? "");
   if (a.plugin === "app_launch") return String(p.app ?? "");
+  if (a.plugin === "git_push") return "git push";
+  if (a.plugin === "git_commit") return "git commit";
+  if (a.plugin === "git_checkout") return "git checkout";
+  if (a.plugin === "git_status") return "git status";
+  if (a.plugin === "git_log") return "git log";
+  if (a.plugin === "git_diff") return "git diff";
+  if (a.plugin === "external" || a.plugin === "ext_shell") return "external";
   return "";
 }
 
@@ -92,6 +109,10 @@ export function needsApproval(
   // Saved workflows are user-defined; running them is an explicit request — do not
   // block on a second "Allow" click (that felt like "nothing happens").
   if (action.plugin === "run_workflow") return false;
+  if (action.plugin === "schedule_list") return false;
+  if (action.plugin === "git_status" || action.plugin === "git_log" || action.plugin === "git_diff") {
+    return false;
+  }
 
   const effective = effectiveRisk(action);
   if (effective === "dangerous") return true;

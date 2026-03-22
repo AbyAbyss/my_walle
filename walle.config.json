@@ -34,8 +34,10 @@
   "hotkeys": {
     "toggle_chat": "Ctrl+Shift+Space",
     "toggle_voice": "Ctrl+Shift+V",
-    "toggle_mode": "Ctrl+Shift+M"
+    "toggle_mode": "Ctrl+Shift+M",
+    "toggle_show_work": "Ctrl+Shift+W"
   },
+  "show_work": false,
   "ui": {
     "theme": "dark-glass",
     "accent": "cyan",
@@ -43,6 +45,22 @@
     "debug_mode": false
   },
   "plugins": {
-    "enabled": ["shell", "app_launch", "notify"]
+    "enabled": ["shell", "app_launch", "notify", "git"]
+  },
+  "memory": {
+    "enabled": true,
+    "max_conversation_history": 200,
+    "max_memory_injection": 8,
+    "db_path": ""
+  },
+  "context": {
+    "inject_active_window": true,
+    "inject_clipboard": false
+  },
+  "developer_mode": {
+    "enabled": false,
+    "watch_dir": "",
+    "auto_detect_repo": true,
+    "inject_git_status": true
   }
 }

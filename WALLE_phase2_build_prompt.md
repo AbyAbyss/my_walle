@@ -431,7 +431,7 @@ Rendered inside the chat panel, below the message list, above the input bar. Onl
 │  ↳ docker-compose up -d                 │ ← action
 │    Container walle_db_1 started         │ ← output (muted, monospace)
 │    Container walle_app_1 started        │
-│  ✓ Docker is up                         │ ← success
+│  ✓ Docker is up                         │ ← v 
 └─────────────────────────────────────────┘
 ```
 

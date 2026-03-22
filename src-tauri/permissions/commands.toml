@@ -57,3 +57,39 @@ commands.allow = ["save_agent_mode"]
 [[permission]]
 identifier = "allow-save-llm-settings"
 commands.allow = ["save_llm_settings"]
+
+[[permission]]
+identifier = "allow-conversation-append"
+commands.allow = ["conversation_append"]
+
+[[permission]]
+identifier = "allow-conversation-load-recent"
+commands.allow = ["conversation_load_recent"]
+
+[[permission]]
+identifier = "allow-get-active-window"
+commands.allow = ["get_active_window"]
+
+[[permission]]
+identifier = "allow-get-clipboard"
+commands.allow = ["get_clipboard"]
+
+[[permission]]
+identifier = "allow-schedules-manage"
+commands.allow = ["schedules_list_cmd", "schedules_delete_cmd", "schedules_set_enabled_cmd"]
+
+[[permission]]
+identifier = "allow-git-commands"
+commands.allow = ["git_status", "git_log", "git_diff", "git_action"]
+
+[[permission]]
+identifier = "allow-save-plugins-enabled"
+commands.allow = ["save_plugins_enabled"]
+
+[[permission]]
+identifier = "allow-save-workflows-bulk"
+commands.allow = ["save_workflows_to_config"]
+
+[[permission]]
+identifier = "allow-external-plugins-list"
+commands.allow = ["list_external_plugin_manifests", "get_user_plugins_dir_cmd"]

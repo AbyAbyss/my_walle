@@ -1,17 +1,27 @@
 mod api_key_cmd;
 mod app_launch;
 mod chat_cmd;
+mod context;
+mod conversation_cmd;
 mod config_cmd;
+mod git;
+mod scheduler;
 mod notify;
 mod plugin_cmd;
 mod shell;
+mod user_plugins;
 mod window_cmd;
 
 pub use api_key_cmd::*;
 pub use app_launch::*;
 pub use chat_cmd::*;
+pub use context::*;
+pub use conversation_cmd::*;
+pub use scheduler::*;
 pub use config_cmd::*;
+pub use git::*;
 pub use notify::*;
 pub use plugin_cmd::*;
 pub use shell::*;
+pub use user_plugins::*;
 pub use window_cmd::*;

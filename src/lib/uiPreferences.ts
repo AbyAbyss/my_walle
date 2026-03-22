@@ -14,6 +14,8 @@ export interface UiPreferencesPatch {
   last_open_date?: string;
   user_level?: UserLevel | string;
   idle_wander?: boolean;
+  /** Live step-by-step narration in the chat panel. */
+  show_work?: boolean;
 }
 
 export async function saveUiPreferences(prefs: UiPreferencesPatch): Promise<void> {

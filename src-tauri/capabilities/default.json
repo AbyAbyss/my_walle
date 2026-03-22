@@ -35,6 +35,16 @@
     "allow-save-agent-mode",
     "allow-save-llm-settings",
     "allow-save-workflow-to-config",
-    "allow-save-ui-preferences"
+    "allow-save-ui-preferences",
+    "allow-conversation-append",
+    "allow-conversation-load-recent",
+    "allow-get-active-window",
+    "allow-get-clipboard",
+    "allow-save-context-settings",
+    "allow-schedules-manage",
+    "allow-git-commands",
+    "allow-save-plugins-enabled",
+    "allow-save-workflows-bulk",
+    "allow-external-plugins-list"
   ]
 }

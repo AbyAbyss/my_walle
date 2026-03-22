@@ -27,6 +27,23 @@ export interface LLMUsage {
   outputTokens: number;
 }
 
+/** Live narration steps when “Show your work” is enabled. */
+export type WorkStepKind =
+  | "work:thinking"
+  | "work:action"
+  | "work:success"
+  | "work:output"
+  | "work:done"
+  | "work:error";
+
+export interface WorkStep {
+  id: string;
+  kind: WorkStepKind;
+  text: string;
+  plugin?: string;
+  at: number;
+}
+
 interface WalleStore {
   mode: "auto" | "manual_review";
   emotion: Emotion;
@@ -38,10 +55,15 @@ interface WalleStore {
   workflows: Workflow[];
   lastUsedModel: string | null;
   lastUsage: LLMUsage | null;
+  workSteps: WorkStep[];
+  addWorkStep: (step: Omit<WorkStep, "id" | "at"> & { id?: string }) => void;
+  clearWorkSteps: () => void;
   setMode: (m: "auto" | "manual_review") => void;
   setEmotion: (e: Emotion) => void;
   setThinking: (v: boolean) => void;
   addMessage: (m: Omit<ChatMessage, "id" | "at"> & { id?: string }) => void;
+  /** Replace chat (e.g. restore from SQLite). */
+  setMessages: (messages: ChatMessage[]) => void;
   /** Blocks until Allow/Deny; clears pending when resolved. */
   startApprovalFlow: (action: WalleAction, onResolved: (approved: boolean) => void) => void;
   resolveApproval: (approved: boolean) => void;
@@ -64,6 +86,21 @@ export const useWalleStore = create<WalleStore>((set, get) => ({
   workflows: [],
   lastUsedModel: null,
   lastUsage: null,
+  workSteps: [],
+  addWorkStep: (step) =>
+    set((s) => ({
+      workSteps: [
+        ...s.workSteps,
+        {
+          id: step.id ?? crypto.randomUUID(),
+          kind: step.kind,
+          text: step.text,
+          plugin: step.plugin,
+          at: Date.now(),
+        },
+      ],
+    })),
+  clearWorkSteps: () => set({ workSteps: [] }),
   setMode: (mode) => set({ mode }),
   setEmotion: (emotion) => set({ emotion }),
   setThinking: (isThinking) => set({ isThinking }),
@@ -79,6 +116,7 @@ export const useWalleStore = create<WalleStore>((set, get) => ({
         },
       ],
     })),
+  setMessages: (messages) => set({ messages }),
   startApprovalFlow: (action, onResolved) =>
     set({ pendingAction: action, approvalCallback: onResolved }),
   resolveApproval: (approved) => {
