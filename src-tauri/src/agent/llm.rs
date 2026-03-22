@@ -198,6 +198,14 @@ fn git_tools_unavailable_note(config: &AppConfig) -> &'static str {
     "\nGit: You do not have git_status or other git_* tools (git plugin is off in Settings → Plugins). If the user asks for real git status/log/diff on their machine, say to enable the git plugin, and return \"actions\": []. Do not invent git output.\n"
 }
 
+/// When shell is off, do not imply the assistant can run terminal commands.
+fn shell_tools_unavailable_note(config: &AppConfig) -> &'static str {
+    if shell_plugin_enabled(config) {
+        return "";
+    }
+    "\nShell: The shell plugin is off in Settings → Plugins. You cannot run terminal commands. If the user asks for real command output, CPU/RAM checks, or anything that needs a shell, say to enable the shell plugin, and return \"actions\": []. Do not invent command output.\n"
+}
+
 fn inject_git_context(config: &AppConfig) -> bool {
     if !git_plugins_allowed_in_config(config) {
         return false;
@@ -433,10 +441,12 @@ fn build_system_prompt(
     };
 
     let shell_execute_note = if shell_plugin_enabled(config) {
-        "Shell: If the user asks you to run, execute, or show output from a terminal/shell/PowerShell command (including trivial commands like echo), you MUST include a shell action with the correct command string. Never fabricate stdout or stderr; the app runs the command and injects real output.\n\n"
+        "Shell: You execute ON the user's machine. If they ask you to run, execute, or show output from a terminal/shell/PowerShell command (including trivial commands like echo), you MUST include a shell action with the correct command string. Never fabricate stdout or stderr; the app runs the command and injects real output.\n\n\
+         Local hardware / suitability (CPU model, core count, RAM, free disk, GPU, \"can I run Ollama\", \"is my PC good enough for model X\"): you MUST NOT say you cannot see their system, and you MUST NOT only tell them to paste commands — use a shell action first so real output appears in the transcript, then summarize in \"message\" after **Result** lines. Never refuse these questions while shell is available.\n\n"
     } else {
         ""
     };
+    let shell_unavailable = shell_tools_unavailable_note(config);
     let git_unavailable = git_tools_unavailable_note(config);
 
     let memory_section = if memory_on {
@@ -487,7 +497,7 @@ Saved workflows:
 Mode: {mode}
 Time: {time}
 
-{shell_execute_note}{git_unavailable}To save a workflow, use plugin "save_workflow".
+{shell_execute_note}{shell_unavailable}{git_unavailable}To save a workflow, use plugin "save_workflow".
 To run a saved workflow, use plugin "run_workflow".
 For recurring tasks, use schedule_create with standard 5-field cron (minute hour day month weekday), e.g. "0 9 * * 1-5" = weekdays 9:00. Use schedule_list / schedule_delete to manage.
 Example trigger phrases: "save this as X", "run X", "start X", "every morning at 8", "remind me weekdays at 5pm"
@@ -548,6 +558,7 @@ Always set a valid emotion. Default to "idle" if nothing else fits."#,
         os_shell_line = runtime_os_shell_line(),
         shell_param_doc = shell_param_doc_line(),
         shell_execute_note = shell_execute_note,
+        shell_unavailable = shell_unavailable,
         git_unavailable = git_unavailable,
     )
 }

@@ -1,4 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import cronstrue from "cronstrue";
 import { useCallback, useEffect, useState } from "react";
 
@@ -349,6 +351,15 @@ export function SettingsPanelContent({ onClose }: SettingsPanelContentProps) {
     }
   };
 
+  const refreshSchedules = useCallback(async () => {
+    try {
+      const rows = await invoke<Schedule[]>("schedules_list_cmd");
+      setSchedules(rows);
+    } catch {
+      setSchedules([]);
+    }
+  }, []);
+
   useEffect(() => {
     void (async () => {
       try {
@@ -384,17 +395,38 @@ export function SettingsPanelContent({ onClose }: SettingsPanelContentProps) {
           setEnabledPlugins(["shell", "app_launch", "notify", "git"]);
         }
         setWorkflows(normalizeWorkflowsFromConfig(parsed));
-        try {
-          const rows = await invoke<Schedule[]>("schedules_list_cmd");
-          setSchedules(rows);
-        } catch {
-          setSchedules([]);
-        }
+        await refreshSchedules();
       } catch (e) {
         setStatus(String(e));
       }
     })().catch((e) => setStatus(String(e)));
-  }, []);
+  }, [refreshSchedules]);
+
+  useEffect(() => {
+    let unlistenFocus: (() => void) | undefined;
+    void getCurrentWindow()
+      .onFocusChanged(({ payload: focused }) => {
+        if (focused) void refreshSchedules();
+      })
+      .then((u) => {
+        unlistenFocus = u;
+      });
+    return () => {
+      unlistenFocus?.();
+    };
+  }, [refreshSchedules]);
+
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    void listen("walle/schedules-changed", () => {
+      void refreshSchedules();
+    }).then((u) => {
+      unlisten = u;
+    });
+    return () => {
+      unlisten?.();
+    };
+  }, [refreshSchedules]);
 
   const refreshPluginsFromConfig = useCallback(async () => {
     try {

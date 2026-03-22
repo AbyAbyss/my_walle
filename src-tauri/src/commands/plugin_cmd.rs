@@ -5,6 +5,7 @@ use serde::Deserialize;
 use serde_json::json;
 use sqlx::SqlitePool;
 use tauri::AppHandle;
+use tauri::Emitter;
 use tauri::Manager;
 
 use crate::commands::app_launch::launch_app;
@@ -332,6 +333,9 @@ pub async fn run_plugin_action(app: AppHandle, action: PluginAction) -> Result<s
         "schedule_create" => {
             let cmd = task_outcomes::params_summary(&action.params);
             let r = plugin_schedule_create(&pool, &action.params).await;
+            if r.is_ok() {
+                let _ = app.emit("walle/schedules-changed", ());
+            }
             finish_with_outcome(&app, &pool, "schedule_create", &cmd, r).await
         }
         "schedule_list" => {
@@ -341,6 +345,9 @@ pub async fn run_plugin_action(app: AppHandle, action: PluginAction) -> Result<s
         "schedule_delete" => {
             let cmd = task_outcomes::params_summary(&action.params);
             let r = plugin_schedule_delete(&pool, &action.params).await;
+            if r.is_ok() {
+                let _ = app.emit("walle/schedules-changed", ());
+            }
             finish_with_outcome(&app, &pool, "schedule_delete", &cmd, r).await
         }
         "external" | "ext_shell" => {
