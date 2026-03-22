@@ -62,5 +62,6 @@
     "watch_dir": "",
     "auto_detect_repo": true,
     "inject_git_status": true
-  }
+  },
+  "schedules": []
 }

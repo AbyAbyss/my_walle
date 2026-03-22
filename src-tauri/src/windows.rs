@@ -49,7 +49,30 @@ pub fn create_mascot_window(app: &AppHandle) -> Result<(), String> {
         .position(x, y)
         .build()
         .map_err(|e| e.to_string())?;
+
+    #[cfg(target_os = "macos")]
+    {
+        if let Some(w) = app.get_webview_window("mascot") {
+            let _ = mascot_macos_set_floating_level(&w);
+        }
+    }
     Ok(())
+}
+
+/// Phase 2 / macOS: float above normal windows (same as `NSFloatingWindowLevel`).
+#[cfg(target_os = "macos")]
+fn mascot_macos_set_floating_level<R: tauri::Runtime>(
+    window: &tauri::WebviewWindow<R>,
+) -> Result<(), String> {
+    window
+        .with_webview(|webview| {
+            unsafe {
+                use objc2_app_kit::{NSFloatingWindowLevel, NSWindow};
+                let ns_window: &NSWindow = &*webview.ns_window().cast();
+                ns_window.setLevel(NSFloatingWindowLevel);
+            }
+        })
+        .map_err(|e| e.to_string())
 }
 
 /// Chat panel: glass-style, hidden until toggled.

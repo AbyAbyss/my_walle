@@ -60,8 +60,16 @@ Key sections (non-exhaustive):
 - `plugins.enabled` — e.g. `shell`, `app_launch`, `notify`, `git`
 - `workflows` — saved multi-step workflows
 - `memory` — SQLite memory settings
+- `schedules` — empty array in the template; **live schedules** are stored in SQLite (key kept for Phase 2 prompt parity)
 
 The app copies the bundled default from the repo on first launch if no config exists.
+
+### Phase 2 implementation notes
+
+- **SQLite** uses the **`sqlx`** crate directly (the Phase 2 doc also mentioned `tauri-plugin-sql`; it is not required alongside `sqlx`).
+- **`memory.db`** is created under the OS **app data** directory (Tauri `app_data_dir`), not a hand-managed `~/.walle/` folder.
+- **Zustand** (`src/store/walleStore.ts`) holds Phase 2 UI state: memories, schedules, active window / clipboard preview, show-work flag, and git context snapshot. **`memories_list_cmd`** (Rust) feeds the memory list when you call **`useMemory().refresh()`**.
+- **Hooks:** `useWalleContext` updates context in the store; **`src/hooks/useContext.ts`** re-exports it (not React’s `useContext`). **`useScheduler`** exposes `refresh()` to reload schedules into the store (Settings already loads on open).
 
 ## Hotkeys (defaults)
 
@@ -82,6 +90,8 @@ The app copies the bundled default from the repo on first launch if no config ex
 
 - **Active window** uses AppleScript (`osascript` + System Events). Usage descriptions are merged from `src-tauri/Info.plist`.
 - **App launch** uses `open -a`.
+- **Mascot window** sets **`NSFloatingWindowLevel`** after creation so it stacks above normal windows (in addition to `always_on_top`).
+- **Bundle:** `tauri.conf.json` references **`entitlements.plist`** (JIT / WebKit-friendly entitlements for Wry).
 
 ## License
 

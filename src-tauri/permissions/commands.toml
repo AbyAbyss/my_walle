@@ -79,6 +79,10 @@ identifier = "allow-schedules-manage"
 commands.allow = ["schedules_list_cmd", "schedules_delete_cmd", "schedules_set_enabled_cmd"]
 
 [[permission]]
+identifier = "allow-memories-list"
+commands.allow = ["memories_list_cmd"]
+
+[[permission]]
 identifier = "allow-git-commands"
 commands.allow = ["git_status", "git_log", "git_diff", "git_action"]
 

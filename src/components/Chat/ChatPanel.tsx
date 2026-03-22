@@ -97,6 +97,7 @@ export default function ChatPanel() {
   const setMode = useWalleStore((s) => s.setMode);
   const setWorkflows = useWalleStore((s) => s.setWorkflows);
   const setMessages = useWalleStore((s) => s.setMessages);
+  const setShowWorkEnabled = useWalleStore((s) => s.setShowWorkEnabled);
   const { sendMessage } = useWalle();
   const { refresh: refreshContext } = useWalleContext();
   const [settings, setSettings] = useState(false);
@@ -116,6 +117,7 @@ export default function ChatPanel() {
       }
       setWorkflows(normalizeWorkflows(parsed));
       setConfigSnapshot(parsed);
+      setShowWorkEnabled(parsed.show_work === true);
       setShowOnboarding(parsed.onboarding_complete === false);
 
       const today = new Date().toDateString();
@@ -135,7 +137,7 @@ export default function ChatPanel() {
 
   useEffect(() => {
     void loadConfig();
-  }, [setMode, setWorkflows]);
+  }, [setMode, setWorkflows, setShowWorkEnabled]);
 
   useEffect(() => {
     void refreshContext();
@@ -185,10 +187,12 @@ export default function ChatPanel() {
       u = await listen("walle/toggle-show-work", async () => {
         try {
           const raw = await invoke<string>("get_walle_config");
-          const j = JSON.parse(raw) as { show_work?: boolean };
-          await saveUiPreferences({ show_work: !(j.show_work === true) });
+          const before = JSON.parse(raw) as { show_work?: boolean };
+          await saveUiPreferences({ show_work: !(before.show_work === true) });
           const next = await invoke<string>("get_walle_config");
-          setConfigSnapshot(JSON.parse(next) as ChatConfigSnapshot);
+          const updated = JSON.parse(next) as ChatConfigSnapshot;
+          setConfigSnapshot(updated);
+          setShowWorkEnabled(updated.show_work === true);
         } catch {
           /* ignore */
         }

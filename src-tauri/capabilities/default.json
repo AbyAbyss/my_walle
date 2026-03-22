@@ -42,6 +42,7 @@
     "allow-get-clipboard",
     "allow-save-context-settings",
     "allow-schedules-manage",
+    "allow-memories-list",
     "allow-git-commands",
     "allow-save-plugins-enabled",
     "allow-save-workflows-bulk",

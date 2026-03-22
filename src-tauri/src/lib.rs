@@ -69,6 +69,7 @@ pub fn run() {
             commands::schedules_list_cmd,
             commands::schedules_delete_cmd,
             commands::schedules_set_enabled_cmd,
+            commands::memories_list_cmd,
             commands::git_status,
             commands::git_log,
             commands::git_diff,

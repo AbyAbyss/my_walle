@@ -7,7 +7,8 @@ import {
   saveUiPreferences,
   type UserLevel,
 } from "../../lib/uiPreferences";
-import type { Workflow } from "../../store/walleStore";
+import type { Schedule, Workflow } from "../../store/walleStore";
+import { useWalleStore } from "../../store/walleStore";
 import PluginManager from "../Settings/PluginManager";
 import WorkflowEditor from "../Settings/WorkflowEditor";
 
@@ -47,16 +48,6 @@ interface SettingsConfig {
 }
 
 type ProviderName = "anthropic" | "openai" | "ollama" | "openrouter";
-
-interface ScheduleRow {
-  id: number;
-  name: string;
-  cronExpr: string;
-  actions: unknown;
-  enabled: boolean;
-  lastRun: string | null;
-  createdAt: string;
-}
 
 interface ProviderPreset {
   label: string;
@@ -234,7 +225,9 @@ export default function SettingsPanel({
   const [injectWindow, setInjectWindow] = useState(true);
   const [injectClipboard, setInjectClipboard] = useState(false);
   const [showWork, setShowWork] = useState(false);
-  const [schedules, setSchedules] = useState<ScheduleRow[]>([]);
+  const schedules = useWalleStore((s) => s.schedules);
+  const setSchedules = useWalleStore((s) => s.setSchedules);
+  const setShowWorkEnabledStore = useWalleStore((s) => s.setShowWorkEnabled);
 
   const refreshKeyStatus = async (nextProvider: ProviderName) => {
     if (!PROVIDER_PRESETS[nextProvider].requiresApiKey) {
@@ -276,6 +269,7 @@ export default function SettingsPanel({
         setInjectWindow(parsed.context?.inject_active_window !== false);
         setInjectClipboard(parsed.context?.inject_clipboard === true);
         setShowWork(parsed.show_work === true);
+        setShowWorkEnabledStore(parsed.show_work === true);
         setStatus("");
         setApiKey("");
         await refreshKeyStatus(nextProvider);
@@ -286,7 +280,7 @@ export default function SettingsPanel({
           setEnabledPlugins(["shell", "app_launch", "notify", "git"]);
         }
         try {
-          const rows = await invoke<ScheduleRow[]>("schedules_list_cmd");
+          const rows = await invoke<Schedule[]>("schedules_list_cmd");
           setSchedules(rows);
         } catch {
           setSchedules([]);
@@ -357,6 +351,7 @@ export default function SettingsPanel({
         setApiKey("");
       }
       await saveUiPreferences({ user_level: userLevel, show_work: showWork });
+      setShowWorkEnabledStore(showWork);
       await invoke("save_context_settings", {
         settings: {
           injectActiveWindow: injectWindow,
@@ -702,8 +697,10 @@ export default function SettingsPanel({
                                 id: row.id,
                                 enabled: next,
                               });
-                              setSchedules((prev) =>
-                                prev.map((s) => (s.id === row.id ? { ...s, enabled: next } : s)),
+                              setSchedules(
+                                schedules.map((s) =>
+                                  s.id === row.id ? { ...s, enabled: next } : s,
+                                ),
                               );
                             } catch (err) {
                               setStatus(String(err));
@@ -722,7 +719,7 @@ export default function SettingsPanel({
                           if (!window.confirm(`Delete schedule “${row.name}”?`)) return;
                           try {
                             await invoke("schedules_delete_cmd", { id: row.id });
-                            setSchedules((prev) => prev.filter((s) => s.id !== row.id));
+                            setSchedules(schedules.filter((s) => s.id !== row.id));
                           } catch (err) {
                             setStatus(String(err));
                           }

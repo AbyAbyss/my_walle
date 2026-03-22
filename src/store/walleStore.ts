@@ -4,6 +4,7 @@ import type { Animation } from "../lib/animation";
 import type { Emotion } from "../lib/emotion";
 import { emitMascotAnimation } from "../lib/mascotBridge";
 import type { WalleAction } from "../lib/actionParser";
+import type { Memory } from "../lib/memory";
 
 export type ChatRole = "user" | "assistant";
 
@@ -44,6 +45,22 @@ export interface WorkStep {
   at: number;
 }
 
+/** Cron schedules (SQLite); mirrors `ScheduleDto` from the backend. */
+export interface Schedule {
+  id: number;
+  name: string;
+  cronExpr: string;
+  actions: unknown;
+  enabled: boolean;
+  lastRun: string | null;
+  createdAt: string;
+}
+
+/** Developer-mode repo hint from window title + watch dir (see `fetchContext`). */
+export interface GitContext {
+  repoPath: string | null;
+}
+
 interface WalleStore {
   mode: "auto" | "manual_review";
   emotion: Emotion;
@@ -56,8 +73,27 @@ interface WalleStore {
   lastUsedModel: string | null;
   lastUsage: LLMUsage | null;
   workSteps: WorkStep[];
+  /** Phase 2 — durable memories (optional UI cache; SQLite is source of truth). */
+  memories: Memory[];
+  /** Phase 2 — schedule rows (optional UI cache; SQLite is source of truth). */
+  schedules: Schedule[];
+  activeWindow: string | null;
+  clipboardPreview: string | null;
+  showWorkEnabled: boolean;
+  gitContext: GitContext | null;
   addWorkStep: (step: Omit<WorkStep, "id" | "at"> & { id?: string }) => void;
   clearWorkSteps: () => void;
+  addMemory: (m: Memory) => void;
+  updateMemory: (key: string, value: string) => void;
+  setMemories: (memories: Memory[]) => void;
+  addSchedule: (s: Schedule) => void;
+  removeSchedule: (id: number) => void;
+  setSchedules: (schedules: Schedule[]) => void;
+  setActiveWindow: (title: string | null) => void;
+  setClipboardPreview: (preview: string | null) => void;
+  setShowWorkEnabled: (v: boolean) => void;
+  setGitContext: (ctx: GitContext | null) => void;
+  toggleShowWork: () => void;
   setMode: (m: "auto" | "manual_review") => void;
   setEmotion: (e: Emotion) => void;
   setThinking: (v: boolean) => void;
@@ -87,6 +123,12 @@ export const useWalleStore = create<WalleStore>((set, get) => ({
   lastUsedModel: null,
   lastUsage: null,
   workSteps: [],
+  memories: [],
+  schedules: [],
+  activeWindow: null,
+  clipboardPreview: null,
+  showWorkEnabled: false,
+  gitContext: null,
   addWorkStep: (step) =>
     set((s) => ({
       workSteps: [
@@ -101,6 +143,31 @@ export const useWalleStore = create<WalleStore>((set, get) => ({
       ],
     })),
   clearWorkSteps: () => set({ workSteps: [] }),
+  addMemory: (m) =>
+    set((s) => ({
+      memories: [...s.memories.filter((x) => x.key !== m.key), m],
+    })),
+  updateMemory: (key, value) =>
+    set((s) => ({
+      memories: s.memories.map((x) =>
+        x.key === key ? { ...x, value, updated_at: new Date().toISOString() } : x,
+      ),
+    })),
+  setMemories: (memories) => set({ memories }),
+  addSchedule: (row) =>
+    set((s) => ({
+      schedules: [...s.schedules.filter((x) => x.id !== row.id), row],
+    })),
+  removeSchedule: (id) =>
+    set((s) => ({
+      schedules: s.schedules.filter((x) => x.id !== id),
+    })),
+  setSchedules: (schedules) => set({ schedules }),
+  setActiveWindow: (activeWindow) => set({ activeWindow }),
+  setClipboardPreview: (clipboardPreview) => set({ clipboardPreview }),
+  setShowWorkEnabled: (showWorkEnabled) => set({ showWorkEnabled }),
+  setGitContext: (gitContext) => set({ gitContext }),
+  toggleShowWork: () => set((s) => ({ showWorkEnabled: !s.showWorkEnabled })),
   setMode: (mode) => set({ mode }),
   setEmotion: (emotion) => set({ emotion }),
   setThinking: (isThinking) => set({ isThinking }),
