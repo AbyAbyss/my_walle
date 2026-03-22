@@ -23,13 +23,13 @@ export const ANIMATIONS: Animation[] = [
 ];
 
 export const ANIMATION_DURATION_MS: Record<Animation, number> = {
-  dance: 1200,
-  wave: 1000,
-  thumbs_up: 1000,
-  confused: 1000,
-  excited_run: 0,
-  stretch: 1200,
-  pet: 800,
+  dance: 1400,
+  wave: 1100,
+  thumbs_up: 1100,
+  confused: 1100,
+  excited_run: 1800,
+  stretch: 1300,
+  pet: 900,
   hover_look: 0,
   none: 0,
 };

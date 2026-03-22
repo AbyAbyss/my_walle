@@ -30,17 +30,17 @@ export default function EmotionEngine({
   onAnimationComplete,
   onPet,
 }: EmotionEngineProps) {
-  const svgRef = useRef<SVGSVGElement>(null);
+  const mascotRef = useRef<HTMLDivElement>(null);
   const stableComplete = useCallback(() => {
     onAnimationComplete();
   }, [onAnimationComplete]);
 
   useAnimationController(animation, stableComplete);
-  useWalleHover(svgRef, animation, emotion);
+  useWalleHover(mascotRef, animation, emotion);
 
   return (
     <WalleMascot
-      ref={svgRef}
+      ref={mascotRef}
       emotion={emotion}
       animation={animation}
       onPet={onPet}

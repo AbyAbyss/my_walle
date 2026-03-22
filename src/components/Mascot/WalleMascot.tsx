@@ -1,254 +1,531 @@
-import { forwardRef, useRef } from "react";
+import { forwardRef, useCallback, useEffect, useRef } from "react";
 
 import type { Animation } from "../../lib/animation";
 import type { Emotion } from "../../lib/emotion";
+import { applyMascotEmotion } from "./mascotApplyEmotion";
+import { spawnMascotParticles } from "./mascotParticles";
 
 /**
- * WALLE mascot — SVG + CSS keyframe emotions and overlay animations.
+ * WALLE mascot — cute SVG from mascot_test/walle_mascot_cute.html + emotion/animation CSS.
  */
 const WalleMascot = forwardRef<
-  SVGSVGElement,
+  HTMLDivElement,
   { emotion: Emotion; animation: Animation; onPet: () => void }
 >(function WalleMascot({ emotion, animation, onPet }, ref) {
   const pointerDown = useRef<{ x: number; y: number } | null>(null);
+  const particlesRef = useRef<HTMLDivElement>(null);
+  const walleRef = useRef<HTMLDivElement>(null);
+  const setWalleRef = useCallback(
+    (node: HTMLDivElement | null) => {
+      walleRef.current = node;
+      if (typeof ref === "function") {
+        ref(node);
+      } else if (ref) {
+        (ref as React.MutableRefObject<HTMLDivElement | null>).current = node;
+      }
+    },
+    [ref],
+  );
 
-  const className = [emotion, animation !== "none" ? animation : ""].filter(Boolean).join(" ");
+  const className = [emotion, animation !== "none" ? animation : ""]
+    .filter(Boolean)
+    .join(" ");
+
+  useEffect(() => {
+    const root = walleRef.current;
+    if (!root) return;
+    applyMascotEmotion(root, emotion);
+  }, [emotion]);
+
+  useEffect(() => {
+    if (emotion !== "sad") return;
+    const root = walleRef.current;
+    if (!root) return;
+
+    const tick = () => {
+      ["tear-l", "tear-r"].forEach((id, i) => {
+        const el = root.querySelector(`#${id}`) as SVGElement | null;
+        if (!el) return;
+        el.animate(
+          [
+            { opacity: 0.9, transform: "translateY(0) scaleY(1)" },
+            { opacity: 0, transform: "translateY(32px) scaleY(1.5)" },
+          ],
+          { duration: 1200, delay: i * 380, fill: "none" },
+        );
+      });
+    };
+    tick();
+    const id = window.setInterval(tick, 1400);
+    return () => window.clearInterval(id);
+  }, [emotion]);
+
+  useEffect(() => {
+    if (animation !== "dance" && animation !== "pet") return;
+    const root = walleRef.current;
+    const particles = particlesRef.current;
+    if (!root || !particles) return;
+
+    let cancelled = false;
+    const raf = requestAnimationFrame(() => {
+      if (cancelled) return;
+      const n = animation === "dance" ? 12 : 8;
+      spawnMascotParticles(root, particles, n);
+    });
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(raf);
+    };
+  }, [animation]);
 
   return (
-    <svg
-      ref={ref}
-      id="walle"
-      className={className}
-      viewBox="0 0 160 200"
-      xmlns="http://www.w3.org/2000/svg"
-      width={160}
-      height={168}
-      aria-hidden
-      style={{ cursor: "pointer", display: "block" }}
-      onPointerDown={(e) => {
-        pointerDown.current = { x: e.clientX, y: e.clientY };
-      }}
-      onPointerUp={(e) => {
-        const start = pointerDown.current;
-        pointerDown.current = null;
-        if (!start) return;
-        const d = Math.hypot(e.clientX - start.x, e.clientY - start.y);
-        if (d < 12) onPet();
-      }}
-    >
-      <ellipse
-        id="shadow"
-        cx="80"
-        cy="192"
-        rx="48"
-        ry="6"
-        fill="#000000"
-        opacity="0.35"
+    <div className="mascot-scene">
+      <div
+        ref={particlesRef}
+        className="mascot-particles"
+        id="mascot-particles"
+        aria-hidden
       />
-
-      <g id="body">
-        <rect
-          id="chassis"
-          x="30"
-          y="80"
-          width="100"
-          height="90"
-          rx="12"
-          fill="#1a1d2e"
-          stroke="#2a2f45"
-          strokeWidth="1.5"
-        />
-        <path
-          id="circuit-left"
-          d="M 38 100 L 52 100 L 58 118 L 44 118 Z"
-          fill="none"
-          stroke="var(--walle-cyan)"
-          strokeWidth="0.8"
-          opacity="0.6"
-        />
-        <path
-          id="circuit-right"
-          d="M 122 100 L 108 100 L 102 118 L 116 118 Z"
-          fill="none"
-          stroke="var(--walle-cyan)"
-          strokeWidth="0.8"
-          opacity="0.6"
-        />
-        <rect
-          id="arm-left"
-          x="22"
-          y="95"
-          width="14"
-          height="28"
-          rx="4"
-          fill="#141621"
-        />
-        <rect
-          id="arm-right"
-          x="124"
-          y="95"
-          width="14"
-          height="28"
-          rx="4"
-          fill="#141621"
-        />
-        <rect
-          id="tread"
-          x="34"
-          y="165"
-          width="92"
-          height="18"
-          rx="8"
-          fill="#0f1117"
-          stroke="#2a3548"
-          strokeWidth="1"
-        />
-
-        <g id="thumb" opacity="0" transform="translate(130, 130)">
-          <rect
-            x="0"
-            y="0"
-            width="8"
-            height="16"
-            rx="4"
-            fill="#1a1d2e"
-            stroke="#2a2f45"
-            strokeWidth="1"
-          />
-          <circle cx="4" cy="-2" r="5" fill="#1a1d2e" stroke="#2a2f45" strokeWidth="1" />
-        </g>
-
-        <g id="arms-stretch" opacity="0">
-          <rect id="arm-stretch-left" x="12" y="70" width="18" height="8" rx="4" fill="#141621" />
-          <rect id="arm-stretch-right" x="130" y="70" width="18" height="8" rx="4" fill="#141621" />
-        </g>
-      </g>
-
-      <g id="particles" opacity="0">
-        <circle id="p1" cx="80" cy="60" r="3" fill="var(--walle-cyan)" />
-        <circle id="p2" cx="80" cy="60" r="3" fill="var(--walle-amber)" />
-        <circle id="p3" cx="80" cy="60" r="3" fill="var(--walle-green)" />
-        <circle id="p4" cx="80" cy="60" r="3" fill="var(--walle-cyan)" />
-        <circle id="p5" cx="80" cy="60" r="3" fill="var(--walle-amber)" />
-        <circle id="p6" cx="80" cy="60" r="3" fill="var(--walle-green)" />
-      </g>
-
-      <g id="head">
-        <rect
-          id="head-box"
-          x="35"
-          y="20"
-          width="90"
-          height="65"
-          rx="10"
-          fill="#1a1d2e"
-          stroke="#2a2f45"
-          strokeWidth="1.5"
-        />
-
-        <g id="antenna">
-          <line
-            x1="80"
-            y1="20"
-            x2="80"
-            y2="6"
-            stroke="#2a2f45"
-            strokeWidth="2"
-          />
-          <circle id="antenna-tip" cx="80" cy="4" r="4" fill="var(--walle-cyan)" />
-        </g>
-
-        <g id="eyes">
-          <rect
-            id="eye-housing-l"
-            x="42"
-            y="32"
-            width="30"
-            height="26"
-            rx="6"
-            fill="#0a0c14"
-            stroke="#1e2235"
-            strokeWidth="1"
-          />
-          <circle
-            id="eye-l"
-            cx="57"
-            cy="45"
-            r="9"
-            fill="var(--walle-amber)"
-            opacity="0.9"
-          />
-          <circle cx="61" cy="41" r="2.5" fill="white" opacity="0.6" />
-
-          <rect
-            id="eye-housing-r"
-            x="88"
-            y="32"
-            width="30"
-            height="26"
-            rx="6"
-            fill="#0a0c14"
-            stroke="#1e2235"
-            strokeWidth="1"
-          />
-          <circle
-            id="eye-r"
-            cx="103"
-            cy="45"
-            r="9"
-            fill="var(--walle-amber)"
-            opacity="0.9"
-          />
-          <circle cx="107" cy="41" r="2.5" fill="white" opacity="0.6" />
-        </g>
-
-        <path
-          id="mouth"
-          d="M60 72 Q80 78 100 72"
-          fill="none"
-          stroke="var(--walle-cyan)"
-          strokeWidth="1.5"
-          strokeLinecap="round"
-          opacity="0.7"
-        />
-      </g>
-
-      <g id="question-bubble" opacity="0" transform="translate(112, 10)">
-        <rect
-          x="0"
-          y="0"
-          width="26"
-          height="26"
-          rx="8"
-          fill="#1e2130"
-          stroke="var(--walle-cyan)"
-          strokeWidth="1"
-        />
-        <text
-          x="13"
-          y="18"
-          textAnchor="middle"
-          fontSize="14"
-          fill="var(--walle-cyan)"
-          fontFamily="var(--walle-font-ui)"
+      <div
+        ref={setWalleRef}
+        id="walle"
+        className={className}
+        style={{
+          position: "relative",
+          width: 190,
+          height: 262,
+          cursor: "pointer",
+          userSelect: "none",
+        }}
+        onPointerDown={(e) => {
+          pointerDown.current = { x: e.clientX, y: e.clientY };
+        }}
+        onPointerUp={(e) => {
+          const start = pointerDown.current;
+          pointerDown.current = null;
+          if (!start) return;
+          const d = Math.hypot(e.clientX - start.x, e.clientY - start.y);
+          if (d < 12) onPet();
+        }}
+      >
+        <svg
+          className="walle-svg"
+          viewBox="0 0 190 262"
+          xmlns="http://www.w3.org/2000/svg"
+          width={190}
+          height={262}
+          aria-hidden
+          style={{ display: "block", overflow: "visible" }}
         >
-          ?
-        </text>
-        <path d="M8 26 L4 32 L14 26Z" fill="#1e2130" />
-      </g>
+          <defs>
+            <linearGradient id="bG" x1="0%" y1="0%" x2="55%" y2="100%">
+              <stop offset="0%" stopColor="#1c2038" />
+              <stop offset="100%" stopColor="#0b0d18" />
+            </linearGradient>
+            <linearGradient id="fG" x1="0%" y1="0%" x2="30%" y2="100%">
+              <stop offset="0%" stopColor="#22253e" />
+              <stop offset="100%" stopColor="#10121e" />
+            </linearGradient>
+            <linearGradient id="tG" x1="0%" y1="0%" x2="0%" y2="100%">
+              <stop offset="0%" stopColor="#181b2c" />
+              <stop offset="100%" stopColor="#08090f" />
+            </linearGradient>
+            <radialGradient id="eG" cx="38%" cy="32%">
+              <stop offset="0%" stopColor="#ffe9aa" />
+              <stop offset="40%" stopColor="#ffb347" />
+              <stop offset="100%" stopColor="#b85c00" />
+            </radialGradient>
+            <radialGradient id="eGC" cx="38%" cy="32%">
+              <stop offset="0%" stopColor="#b0f5ff" />
+              <stop offset="55%" stopColor="#00d4ff" />
+              <stop offset="100%" stopColor="#005f7a" />
+            </radialGradient>
+            <radialGradient id="blG">
+              <stop offset="0%" stopColor="#ff6eb4" stopOpacity=".5" />
+              <stop offset="100%" stopColor="#ff6eb4" stopOpacity="0" />
+            </radialGradient>
+            <filter id="eF">
+              <feGaussianBlur stdDeviation="3" result="b" />
+              <feMerge>
+                <feMergeNode in="b" />
+                <feMergeNode in="SourceGraphic" />
+              </feMerge>
+            </filter>
+            <filter id="cF">
+              <feGaussianBlur stdDeviation="4" result="b" />
+              <feMerge>
+                <feMergeNode in="b" />
+                <feMergeNode in="SourceGraphic" />
+              </feMerge>
+            </filter>
+          </defs>
 
-      <g id="speech-bubble" opacity="0" transform="translate(110, 0)">
-        <rect
-          x="0"
-          y="20"
-          width="40"
-          height="24"
-          rx="6"
-          fill="var(--walle-bg-2)"
-          stroke="var(--walle-glass-border)"
-        />
-      </g>
-    </svg>
+          <ellipse cx="95" cy="256" rx="56" ry="6" fill="#00d4ff" opacity=".07" />
+
+          <g className="whole">
+            <rect
+              x="18"
+              y="210"
+              width="154"
+              height="38"
+              rx="19"
+              fill="url(#tG)"
+              stroke="#22253e"
+              strokeWidth="1.5"
+            />
+            <rect x="30" y="214" width="13" height="30" rx="6.5" fill="#06070d" opacity=".8" />
+            <rect x="50" y="214" width="13" height="30" rx="6.5" fill="#06070d" opacity=".8" />
+            <rect x="70" y="214" width="13" height="30" rx="6.5" fill="#06070d" opacity=".8" />
+            <rect x="90" y="214" width="13" height="30" rx="6.5" fill="#06070d" opacity=".8" />
+            <rect x="110" y="214" width="13" height="30" rx="6.5" fill="#06070d" opacity=".8" />
+            <rect x="130" y="214" width="13" height="30" rx="6.5" fill="#06070d" opacity=".8" />
+            <rect x="150" y="214" width="13" height="30" rx="6.5" fill="#06070d" opacity=".8" />
+            <rect x="20" y="226" width="150" height="3" rx="1.5" fill="#00d4ff" opacity=".18" />
+            <circle cx="28" cy="229" r="10" fill="#0d0f1a" stroke="#1e2235" strokeWidth="1.2" />
+            <circle cx="162" cy="229" r="10" fill="#0d0f1a" stroke="#1e2235" strokeWidth="1.2" />
+            <circle cx="28" cy="229" r="4.5" fill="#181b28" />
+            <circle cx="162" cy="229" r="4.5" fill="#181b28" />
+
+            <rect
+              x="26"
+              y="138"
+              width="138"
+              height="78"
+              rx="26"
+              fill="url(#bG)"
+              stroke="#22253e"
+              strokeWidth="1.5"
+            />
+            <rect
+              x="40"
+              y="151"
+              width="110"
+              height="55"
+              rx="16"
+              fill="#09091a"
+              stroke="#181b2c"
+              strokeWidth="1"
+            />
+
+            <circle cx="58" cy="165" r="3" fill="#00d4ff" opacity=".55" />
+            <circle cx="72" cy="165" r="3" fill="#00d4ff" opacity=".38" />
+            <circle cx="86" cy="165" r="3" fill="#00d4ff" opacity=".55" />
+            <circle cx="100" cy="165" r="3" fill="#00d4ff" opacity=".38" />
+            <circle cx="114" cy="165" r="3" fill="#00d4ff" opacity=".55" />
+            <circle cx="128" cy="165" r="3" fill="#00d4ff" opacity=".38" />
+            <circle cx="58" cy="179" r="2.5" fill="#00d4ff" opacity=".3" />
+            <circle cx="72" cy="179" r="3" fill="#ffb347" opacity=".48" />
+            <circle cx="86" cy="179" r="2.5" fill="#00d4ff" opacity=".3" />
+            <circle cx="100" cy="179" r="3" fill="#00ff88" opacity=".42" />
+            <circle cx="114" cy="179" r="2.5" fill="#00d4ff" opacity=".3" />
+            <circle cx="128" cy="179" r="2.5" fill="#ffe066" opacity=".4" />
+
+            <rect
+              x="52"
+              y="191"
+              width="34"
+              height="8"
+              rx="4"
+              fill="none"
+              stroke="#00d4ff"
+              strokeWidth="1.2"
+              opacity=".65"
+            />
+            <rect
+              x="104"
+              y="191"
+              width="34"
+              height="8"
+              rx="4"
+              fill="none"
+              stroke="#00d4ff"
+              strokeWidth="1.2"
+              opacity=".65"
+            />
+
+            <circle cx="32" cy="144" r="3.5" fill="#181b2c" stroke="#252840" strokeWidth="1" />
+            <circle cx="158" cy="144" r="3.5" fill="#181b2c" stroke="#252840" strokeWidth="1" />
+            <circle cx="32" cy="208" r="3.5" fill="#181b2c" stroke="#252840" strokeWidth="1" />
+            <circle cx="158" cy="208" r="3.5" fill="#181b2c" stroke="#252840" strokeWidth="1" />
+
+            <g className="arm-l">
+              <rect
+                x="2"
+                y="130"
+                width="28"
+                height="50"
+                rx="14"
+                fill="#13162a"
+                stroke="#22253e"
+                strokeWidth="1.5"
+              />
+              <rect x="5" y="134" width="10" height="20" rx="5" fill="#1c2038" opacity=".7" />
+              <rect
+                x="4"
+                y="171"
+                width="24"
+                height="9"
+                rx="4.5"
+                fill="#08090f"
+                stroke="#00d4ff"
+                strokeWidth="1"
+                opacity=".65"
+              />
+            </g>
+
+            <g className="arm-r">
+              <rect
+                x="160"
+                y="130"
+                width="28"
+                height="50"
+                rx="14"
+                fill="#13162a"
+                stroke="#22253e"
+                strokeWidth="1.5"
+              />
+              <rect x="175" y="134" width="10" height="20" rx="5" fill="#1c2038" opacity=".7" />
+              <rect
+                x="162"
+                y="171"
+                width="24"
+                height="9"
+                rx="4.5"
+                fill="#08090f"
+                stroke="#00d4ff"
+                strokeWidth="1"
+                opacity=".65"
+              />
+            </g>
+
+            <rect x="70" y="130" width="50" height="14" rx="7" fill="#13162a" stroke="#22253e" strokeWidth="1" />
+            <rect x="78" y="133" width="34" height="4" rx="2" fill="#00d4ff" opacity=".16" />
+
+            <g className="head-grp">
+              <g className="ant-grp">
+                <rect
+                  x="91.5"
+                  y="5"
+                  width="7"
+                  height="24"
+                  rx="3.5"
+                  fill="#1a1e30"
+                  stroke="#22253e"
+                  strokeWidth="1"
+                />
+                <circle
+                  className="ant-dot"
+                  cx="95"
+                  cy="4.5"
+                  r="7"
+                  fill="#00d4ff"
+                  opacity=".92"
+                  filter="url(#cF)"
+                />
+                <circle cx="95" cy="4.5" r="10" fill="none" stroke="#00d4ff" strokeWidth=".7" opacity=".28" />
+                <line x1="95" y1="-4" x2="95" y2="-9" stroke="#00d4ff" strokeWidth="1.2" opacity=".4" />
+                <line x1="102" y1="0" x2="107" y2="-3" stroke="#00d4ff" strokeWidth="1.2" opacity=".3" />
+                <line x1="88" y1="0" x2="83" y2="-3" stroke="#00d4ff" strokeWidth="1.2" opacity=".3" />
+                <line x1="103" y1="7" x2="108" y2="8" stroke="#00d4ff" strokeWidth=".8" opacity=".2" />
+                <line x1="87" y1="7" x2="82" y2="8" stroke="#00d4ff" strokeWidth=".8" opacity=".2" />
+              </g>
+
+              <rect
+                x="10"
+                y="26"
+                width="170"
+                height="108"
+                rx="40"
+                fill="url(#fG)"
+                stroke="#22253e"
+                strokeWidth="1.5"
+              />
+              <ellipse cx="95" cy="35" rx="56" ry="12" fill="white" opacity=".022" />
+              <rect x="14" y="30" width="162" height="100" rx="36" fill="none" stroke="#181b2c" strokeWidth="1" />
+
+              <rect
+                x="18"
+                y="38"
+                width="68"
+                height="66"
+                rx="26"
+                fill="#07070f"
+                stroke="#1e2235"
+                strokeWidth="1.5"
+              />
+              <rect
+                x="104"
+                y="38"
+                width="68"
+                height="66"
+                rx="26"
+                fill="#07070f"
+                stroke="#1e2235"
+                strokeWidth="1.5"
+              />
+              <rect
+                x="20"
+                y="40"
+                width="64"
+                height="62"
+                rx="24"
+                fill="none"
+                stroke="#ffb347"
+                strokeWidth=".6"
+                opacity=".14"
+              />
+              <rect
+                x="106"
+                y="40"
+                width="64"
+                height="62"
+                rx="24"
+                fill="none"
+                stroke="#ffb347"
+                strokeWidth=".6"
+                opacity=".14"
+              />
+
+              <circle cx="52" cy="71" r="24" fill="#ffb347" opacity=".07" />
+              <circle cx="138" cy="71" r="24" fill="#ffb347" opacity=".07" />
+
+              <circle className="eye-l" cx="52" cy="71" r="22" fill="url(#eG)" filter="url(#eF)" />
+              <circle id="pL" cx="52" cy="71" r="10" fill="#180800" opacity=".88" />
+              <circle cx="60" cy="63" r="7" fill="white" opacity=".62" />
+              <circle cx="57" cy="62" r="2.5" fill="white" opacity=".96" />
+              <circle cx="66" cy="76" r="2" fill="white" opacity=".25" />
+
+              <circle className="eye-r" cx="138" cy="71" r="22" fill="url(#eG)" filter="url(#eF)" />
+              <circle id="pR" cx="138" cy="71" r="10" fill="#180800" opacity=".88" />
+              <circle cx="146" cy="63" r="7" fill="white" opacity=".62" />
+              <circle cx="143" cy="62" r="2.5" fill="white" opacity=".96" />
+              <circle cx="152" cy="76" r="2" fill="white" opacity=".25" />
+
+              <ellipse id="bl-l" cx="22" cy="92" rx="16" ry="11" fill="url(#blG)" opacity=".75" />
+              <ellipse id="bl-r" cx="168" cy="92" rx="16" ry="11" fill="url(#blG)" opacity=".75" />
+
+              <rect id="lid-l" x="19" y="38" width="68" height="0" rx="24" fill="#07070f" opacity="0" />
+              <rect id="lid-r" x="105" y="38" width="68" height="0" rx="24" fill="#07070f" opacity="0" />
+              <rect id="sq-l" x="19" y="71" width="68" height="0" fill="#07070f" opacity="0" />
+              <rect id="sq-r" x="105" y="71" width="68" height="0" fill="#07070f" opacity="0" />
+
+              <ellipse id="tear-l" cx="42" cy="90" rx="3.5" ry="5" fill="#7adeff" opacity="0" />
+              <ellipse id="tear-r" cx="128" cy="90" rx="3.5" ry="5" fill="#7adeff" opacity="0" />
+
+              <g id="tdots" opacity="0">
+                <circle cx="76" cy="118" r="4.5" fill="#00d4ff">
+                  <animate attributeName="opacity" values=".12;1;.12" dur="1.1s" begin="0s" repeatCount="indefinite" />
+                </circle>
+                <circle cx="95" cy="118" r="4.5" fill="#00d4ff">
+                  <animate attributeName="opacity" values=".12;1;.12" dur="1.1s" begin=".37s" repeatCount="indefinite" />
+                </circle>
+                <circle cx="114" cy="118" r="4.5" fill="#00d4ff">
+                  <animate attributeName="opacity" values=".12;1;.12" dur="1.1s" begin=".74s" repeatCount="indefinite" />
+                </circle>
+              </g>
+
+              <g id="zzz" opacity="0">
+                <text
+                  id="zzz-a"
+                  x="162"
+                  y="38"
+                  fontSize="14"
+                  fill="#00d4ff"
+                  fontFamily="Nunito,sans-serif"
+                  fontWeight="900"
+                  opacity="0"
+                >
+                  z
+                </text>
+                <text
+                  id="zzz-b"
+                  x="173"
+                  y="20"
+                  fontSize="20"
+                  fill="#00d4ff"
+                  fontFamily="Nunito,sans-serif"
+                  fontWeight="900"
+                  opacity="0"
+                >
+                  Z
+                </text>
+              </g>
+
+              <g id="qmark" opacity="0">
+                <rect x="158" y="10" width="30" height="30" rx="10" fill="#10121e" stroke="#00d4ff" strokeWidth="1.3" />
+                <text x="173" y="31" textAnchor="middle" fontSize="17" fill="#00d4ff" fontFamily="Nunito,sans-serif" fontWeight="900">
+                  ?
+                </text>
+              </g>
+
+              <rect
+                id="ar-l"
+                x="14"
+                y="34"
+                width="76"
+                height="74"
+                rx="28"
+                fill="none"
+                stroke="#00d4ff"
+                strokeWidth="0"
+                opacity="0"
+              />
+              <rect
+                id="ar-r"
+                x="100"
+                y="34"
+                width="76"
+                height="74"
+                rx="28"
+                fill="none"
+                stroke="#00d4ff"
+                strokeWidth="0"
+                opacity="0"
+              />
+
+              <path
+                id="m-smile"
+                d="M62 112 Q95 128 128 112"
+                fill="none"
+                stroke="#00d4ff"
+                strokeWidth="2.8"
+                strokeLinecap="round"
+                opacity=".88"
+              />
+              <path
+                id="m-open"
+                d="M65 110 Q95 130 125 110"
+                fill="#040408"
+                stroke="#00d4ff"
+                strokeWidth="2.8"
+                strokeLinecap="round"
+                opacity="0"
+              />
+              <path
+                id="m-frown"
+                d="M65 120 Q95 106 125 120"
+                fill="none"
+                stroke="#00d4ff"
+                strokeWidth="2.8"
+                strokeLinecap="round"
+                opacity="0"
+              />
+              <line
+                id="m-flat"
+                x1="76"
+                y1="115"
+                x2="114"
+                y2="115"
+                stroke="#00d4ff"
+                strokeWidth="2.2"
+                strokeLinecap="round"
+                opacity="0"
+              />
+            </g>
+          </g>
+        </svg>
+      </div>
+    </div>
   );
 });
 

@@ -44,7 +44,7 @@ pub fn create_mascot_window(app: &AppHandle) -> Result<(), String> {
         .always_on_top(true)
         .skip_taskbar(true)
         .resizable(false)
-        .inner_size(160.0, 200.0)
+        .inner_size(220.0, 300.0)
         .shadow(false)
         .position(x, y)
         .build()

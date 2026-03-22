@@ -79,8 +79,8 @@ export default function MascotWindow({ children, emotion, animation }: MascotWin
   return (
     <div
       style={{
-        width: 160,
-        height: 200,
+        width: 220,
+        height: 300,
         background: "transparent",
         userSelect: "none",
         display: "flex",
