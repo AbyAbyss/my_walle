@@ -532,9 +532,12 @@ export function SettingsPanelContent({ onClose }: SettingsPanelContentProps) {
           display: "grid",
           gap: 18,
           minHeight: 0,
+          /* Avoid default grid item stretch: tall content row was stretching the tab bar + pill buttons */
+          alignItems: "start",
+          justifyItems: "stretch",
         }}
       >
-        <div className="flex flex-wrap gap-2 shrink-0">
+        <div className="flex flex-wrap items-center gap-2 shrink-0 self-start">
           {(
             [
               { id: "general" as const, label: "General" },
@@ -547,7 +550,7 @@ export function SettingsPanelContent({ onClose }: SettingsPanelContentProps) {
               key={t.id}
               type="button"
               onClick={() => setTab(t.id)}
-              className="text-[12px] px-3 py-1.5 rounded-xl transition"
+              className="text-[12px] px-3 py-1.5 rounded-xl transition shrink-0"
               style={{
                 border:
                   tab === t.id
@@ -555,6 +558,9 @@ export function SettingsPanelContent({ onClose }: SettingsPanelContentProps) {
                     : "1px solid var(--walle-glass-border)",
                 background: tab === t.id ? "var(--walle-cyan-dim)" : "rgba(10,10,15,0.72)",
                 color: "var(--walle-text-primary)",
+                width: "auto",
+                height: "auto",
+                lineHeight: 1.25,
               }}
             >
               {t.label}
