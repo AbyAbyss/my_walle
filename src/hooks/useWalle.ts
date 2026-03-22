@@ -2,6 +2,8 @@ import { invoke } from "@tauri-apps/api/core";
 import { emitTo } from "@tauri-apps/api/event";
 
 import {
+  buildAgentContinueUserText,
+  buildChatHistoryForAgentContinue,
   buildChatHistoryPayload,
   buildHistoryForFollowUp,
   TOOL_FOLLOWUP_USER_TEXT,
@@ -103,6 +105,21 @@ async function getShowWorkEnabled(): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+/** Max planner rounds for observe→re-plan loop (1 = legacy single-shot). */
+async function getMaxAgentIterations(): Promise<number> {
+  try {
+    const raw = await invoke<string>("get_walle_config");
+    const j = JSON.parse(raw) as { agent?: { max_iterations?: number } };
+    const n = j.agent?.max_iterations;
+    if (typeof n === "number" && Number.isFinite(n) && n >= 1 && n <= 32) {
+      return Math.floor(n);
+    }
+  } catch {
+    /* ignore */
+  }
+  return 1;
 }
 
 function shortenText(s: string, max: number): string {
@@ -221,6 +238,12 @@ async function appendToolFollowUpSummary() {
   }
 }
 
+/** Batch execution options: multi-step loop defers auto-summarize until the final planner round. */
+interface ExecutePlanOptions {
+  suppressAutoSummarize?: boolean;
+  iteration?: { current: number; max: number };
+}
+
 async function runPluginActionWithResult(action: WalleAction, showWork: boolean): Promise<boolean> {
   const store = useWalleStore.getState();
   const isWorkflow = action.plugin === "run_workflow";
@@ -328,17 +351,32 @@ async function runPluginActionWithResult(action: WalleAction, showWork: boolean)
   }
 }
 
-async function executeActionPlan(plan: WallePlan, mode: "auto" | "manual_review") {
+/**
+ * Runs plugin actions for one planner round. When `suppressAutoSummarize` is true (more rounds may follow),
+ * skips inline tool summaries and returns true so the caller can run `appendToolFollowUpSummary` once at the end.
+ */
+async function executeActionPlan(
+  plan: WallePlan,
+  mode: "auto" | "manual_review",
+  options?: ExecutePlanOptions,
+): Promise<boolean> {
+  const suppressAutoSummarize = options?.suppressAutoSummarize === true;
+  const iteration = options?.iteration;
+  const shouldClearWork = !iteration || iteration.current === 1;
+
   const store = useWalleStore.getState();
   const actions = plan.actions;
   if (!actions.length) {
-    store.clearWorkSteps();
-    return;
+    if (shouldClearWork) store.clearWorkSteps();
+    return false;
   }
 
   const showWork = await getShowWorkEnabled();
-  store.clearWorkSteps();
+  if (shouldClearWork) store.clearWorkSteps();
   if (showWork) {
+    if (iteration && iteration.max > 1) {
+      pushWork(showWork, "work:iteration", `Planner round ${iteration.current} of ${iteration.max}`);
+    }
     pushWork(
       showWork,
       "work:thinking",
@@ -348,6 +386,16 @@ async function executeActionPlan(plan: WallePlan, mode: "auto" | "manual_review"
 
   const delayMs = await getActionDelayMs();
   let autoBatchSummarize = false;
+  let deferredSummary = false;
+
+  const maybeAppendSummary = async () => {
+    if (!(await getAutoSummarizeEnabled())) return;
+    if (suppressAutoSummarize) {
+      deferredSummary = true;
+      return;
+    }
+    await appendToolFollowUpSummary();
+  };
 
   for (let i = 0; i < actions.length; i++) {
     const action = actions[i];
@@ -356,7 +404,7 @@ async function executeActionPlan(plan: WallePlan, mode: "auto" | "manual_review"
 
     if (needApproval) {
       if (autoBatchSummarize && (await getAutoSummarizeEnabled())) {
-        await appendToolFollowUpSummary();
+        await maybeAppendSummary();
         autoBatchSummarize = false;
       }
       await emitMascotEmotion("thinking");
@@ -384,7 +432,11 @@ async function executeActionPlan(plan: WallePlan, mode: "auto" | "manual_review"
 
     if (needApproval) {
       if (ranSummarizable && (await getAutoSummarizeEnabled())) {
-        await appendToolFollowUpSummary();
+        if (suppressAutoSummarize) {
+          deferredSummary = true;
+        } else {
+          await appendToolFollowUpSummary();
+        }
       } else {
         await emitMascotEmotion("happy");
       }
@@ -396,12 +448,18 @@ async function executeActionPlan(plan: WallePlan, mode: "auto" | "manual_review"
   }
 
   if (autoBatchSummarize && (await getAutoSummarizeEnabled())) {
-    await appendToolFollowUpSummary();
+    await maybeAppendSummary();
   }
 
   if (showWork && actions.length) {
-    pushWork(showWork, "work:done", "All done.");
+    pushWork(
+      showWork,
+      "work:done",
+      suppressAutoSummarize ? "Round complete." : "All done.",
+    );
   }
+
+  return deferredSummary;
 }
 
 export function useWalle() {
@@ -412,40 +470,80 @@ export function useWalle() {
     store.setThinking(true);
     try {
       await emitMascotEmotion("thinking");
-      const history = buildChatHistoryPayload(useWalleStore.getState().messages);
-      const ctx = await fetchWalleContextForLlm();
-      const response = await invoke<WalleChatResponse>("walle_chat", {
-        payload: {
-          userText: text,
-          history,
-          activeWindowTitle: ctx.activeWindowTitle,
-          clipboardPreview: ctx.clipboardPreview,
-          gitRepoPath: ctx.gitRepoPath,
-        },
-      });
-      store.setLastUsedModel(response.model);
-      store.setLastUsage({
-        model: response.model,
-        inputTokens: response.input_tokens ?? 0,
-        outputTokens: response.output_tokens ?? 0,
-      });
-      let plan;
-      try {
-        plan = parsePlan(response.raw);
-      } catch {
-        useWalleStore.getState().addMessage({ role: "assistant", text: response.raw });
-        void persistConversationLine("assistant", response.raw, null);
-        await emitMascotAnimation("confused");
-        await emitMascotEmotion("idle");
-        return;
-      }
-      store.addMessage({ role: "assistant", text: plan.message });
-      void persistConversationLine("assistant", plan.message, plan.emotion);
-      store.setEmotion(plan.emotion);
-      await emitMascotEmotion(plan.emotion);
+      const maxIter = await getMaxAgentIterations();
+      let iteration = 1;
+      let pendingDeferredSummary = false;
 
-      const mode = store.mode;
-      await executeActionPlan(plan, mode);
+      while (iteration <= maxIter) {
+        const history =
+          iteration === 1
+            ? buildChatHistoryPayload(useWalleStore.getState().messages)
+            : buildChatHistoryForAgentContinue(useWalleStore.getState().messages);
+
+        const userTextForLlm =
+          iteration === 1 ? text : buildAgentContinueUserText(iteration, maxIter);
+
+        const ctx = await fetchWalleContextForLlm();
+        const response = await invoke<WalleChatResponse>("walle_chat", {
+          payload: {
+            userText: userTextForLlm,
+            history,
+            activeWindowTitle: ctx.activeWindowTitle,
+            clipboardPreview: ctx.clipboardPreview,
+            gitRepoPath: ctx.gitRepoPath,
+            ...(maxIter > 1 ? { agentStep: iteration, agentMaxSteps: maxIter } : {}),
+          },
+        });
+        store.setLastUsedModel(response.model);
+        store.setLastUsage({
+          model: response.model,
+          inputTokens: response.input_tokens ?? 0,
+          outputTokens: response.output_tokens ?? 0,
+        });
+        let plan;
+        try {
+          plan = parsePlan(response.raw);
+        } catch {
+          useWalleStore.getState().addMessage({ role: "assistant", text: response.raw });
+          void persistConversationLine("assistant", response.raw, null);
+          await emitMascotAnimation("confused");
+          await emitMascotEmotion("idle");
+          return;
+        }
+        store.addMessage({ role: "assistant", text: plan.message });
+        void persistConversationLine("assistant", plan.message, plan.emotion);
+        store.setEmotion(plan.emotion);
+        await emitMascotEmotion(plan.emotion);
+
+        const mode = store.mode;
+
+        if (!plan.actions.length) {
+          if (pendingDeferredSummary && (await getAutoSummarizeEnabled())) {
+            await appendToolFollowUpSummary();
+          }
+          break;
+        }
+
+        const suppressSummary = maxIter > 1 && iteration < maxIter;
+        const execOpts: ExecutePlanOptions | undefined =
+          maxIter > 1
+            ? {
+                suppressAutoSummarize: suppressSummary,
+                iteration: { current: iteration, max: maxIter },
+              }
+            : undefined;
+
+        pendingDeferredSummary = await executeActionPlan(plan, mode, execOpts);
+
+        if (iteration >= maxIter) {
+          if (pendingDeferredSummary && (await getAutoSummarizeEnabled())) {
+            await appendToolFollowUpSummary();
+          }
+          break;
+        }
+
+        iteration += 1;
+      }
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       const errLine = `Error: ${msg}`;

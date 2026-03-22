@@ -16,6 +16,15 @@ function StepLine({ step }: { step: WorkStep }) {
           <span style={{ color: "var(--walle-text-secondary)" }}>{step.text}</span>
         </div>
       );
+    case "work:iteration":
+      return (
+        <div
+          className="text-[11px] font-semibold uppercase tracking-wide pt-1"
+          style={{ color: "var(--walle-cyan)" }}
+        >
+          {step.text}
+        </div>
+      );
     case "work:action":
       return (
         <div className="text-[12px] pl-4" style={{ ...mono, color: "var(--walle-cyan)" }}>

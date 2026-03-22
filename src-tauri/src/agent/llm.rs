@@ -33,6 +33,10 @@ struct UserConfig {
 #[derive(Debug, Deserialize)]
 struct AgentConfig {
     mode: Option<String>,
+    /// Max planner rounds for the frontend agent loop (informational; prompt uses payload step/max).
+    #[serde(default)]
+    #[allow(dead_code)]
+    max_iterations: Option<u32>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -142,14 +146,6 @@ fn context_inject_clipboard(config: &AppConfig) -> bool {
         .unwrap_or(false)
 }
 
-fn developer_mode_enabled(config: &AppConfig) -> bool {
-    config
-        .developer_mode
-        .as_ref()
-        .map(|d| d.enabled)
-        .unwrap_or(false)
-}
-
 fn shell_plugin_list_line() -> String {
     if cfg!(target_os = "windows") {
         "- shell: run PowerShell commands (Windows)".to_string()
@@ -186,12 +182,31 @@ fn git_plugins_allowed_in_config(config: &AppConfig) -> bool {
     }
 }
 
+fn shell_plugin_enabled(config: &AppConfig) -> bool {
+    match config.plugins.as_ref().and_then(|p| p.enabled.as_ref()) {
+        None => true,
+        Some(list) if list.is_empty() => true,
+        Some(list) => list.iter().any(|x| x == "shell"),
+    }
+}
+
+/// When git_* are not in the JSON schema, tell the model not to hallucinate git output.
+fn git_tools_unavailable_note(config: &AppConfig) -> &'static str {
+    if git_plugins_allowed_in_config(config) {
+        return "";
+    }
+    "\nGit: You do not have git_status or other git_* tools (git plugin is off in Settings → Plugins). If the user asks for real git status/log/diff on their machine, say to enable the git plugin, and return \"actions\": []. Do not invent git output.\n"
+}
+
 fn inject_git_context(config: &AppConfig) -> bool {
+    if !git_plugins_allowed_in_config(config) {
+        return false;
+    }
     config
         .developer_mode
         .as_ref()
-        .map(|d| d.enabled && d.inject_git_status)
-        .unwrap_or(false)
+        .map(|d| d.inject_git_status != false)
+        .unwrap_or(true)
 }
 
 async fn build_git_context_section(config: &AppConfig, git_repo_path: Option<&str>) -> String {
@@ -284,24 +299,17 @@ fn build_plugin_list(config: &AppConfig) -> String {
             plugins.push(schedule_plugin.to_string());
         }
     }
-    if developer_mode_enabled(config) {
-        let git_ok = match config.plugins.as_ref().and_then(|p| p.enabled.as_ref()) {
-            None => true,
-            Some(list) if list.is_empty() => true,
-            Some(list) => list.iter().any(|x| x == "git"),
-        };
-        if git_ok {
-            for p in [
-                "git_status",
-                "git_log",
-                "git_diff",
-                "git_commit",
-                "git_push",
-                "git_checkout",
-            ] {
-                if !plugins.iter().any(|plugin| plugin == p) {
-                    plugins.push(p.to_string());
-                }
+    if git_plugins_allowed_in_config(config) {
+        for p in [
+            "git_status",
+            "git_log",
+            "git_diff",
+            "git_commit",
+            "git_push",
+            "git_checkout",
+        ] {
+            if !plugins.iter().any(|plugin| plugin == p) {
+                plugins.push(p.to_string());
             }
         }
     }
@@ -370,6 +378,25 @@ fn build_workflow_list(workflows: Option<&Vec<WorkflowConfig>>) -> String {
     }
 }
 
+fn agent_loop_prompt_block(agent_step: Option<u32>, agent_max_steps: Option<u32>) -> String {
+    let (Some(step), Some(max)) = (agent_step, agent_max_steps) else {
+        return String::new();
+    };
+    if max <= 1 {
+        return String::new();
+    }
+    let step = step.max(1).min(max);
+    if step <= 1 {
+        format!(
+            "\nMulti-step mode: at most {max} planner rounds. In THIS round, if the user asked to run a workflow, shell command, app, git command, or any plugin, you MUST put those in \"actions\" now — do not use an empty \"actions\" array while claiming success or \"done\". Empty \"actions\" are only for pure Q&A with no tools, or after tools already ran and you see their **Result** lines in the transcript. The app runs your actions, then may call you again with tool output.\n"
+        )
+    } else {
+        format!(
+            "\nMulti-step continuation — planner round {step} of {max}. The latest user line may be an internal [WALLE agent] instruction; rely on the full transcript including **Result** / tool output lines. Return more actions to continue, or \"actions\": [] when done.\n"
+        )
+    }
+}
+
 fn build_system_prompt(
     config: &AppConfig,
     memory_on: bool,
@@ -377,6 +404,8 @@ fn build_system_prompt(
     context_block: &str,
     git_context_block: &str,
     persona_block: &str,
+    agent_step: Option<u32>,
+    agent_max_steps: Option<u32>,
 ) -> String {
     let user_name = config
         .user
@@ -390,12 +419,7 @@ fn build_system_prompt(
         .unwrap_or("manual_review");
     let workflow_list = build_workflow_list(config.workflows.as_ref());
     let plugin_list = build_plugin_list(config);
-    let git_prompt = developer_mode_enabled(config) && git_plugins_allowed_in_config(config);
-    let plugin_union = if git_prompt {
-        "shell|app_launch|notify|save_workflow|run_workflow|schedule_create|schedule_list|schedule_delete|git_status|git_log|git_diff|git_commit|git_push|git_checkout|chain"
-    } else {
-        "shell|app_launch|notify|save_workflow|run_workflow|schedule_create|schedule_list|schedule_delete|chain"
-    };
+    let git_prompt = git_plugins_allowed_in_config(config);
     let git_params = if git_prompt {
         r#"- git_status: {{ "repo_path": "absolute path to .git parent" }}
 - git_log: {{ "repo_path": "...", "n": optional number (default 10, max 500) }}
@@ -407,6 +431,13 @@ fn build_system_prompt(
     } else {
         ""
     };
+
+    let shell_execute_note = if shell_plugin_enabled(config) {
+        "Shell: If the user asks you to run, execute, or show output from a terminal/shell/PowerShell command (including trivial commands like echo), you MUST include a shell action with the correct command string. Never fabricate stdout or stderr; the app runs the command and injects real output.\n\n"
+    } else {
+        ""
+    };
+    let git_unavailable = git_tools_unavailable_note(config);
 
     let memory_section = if memory_on {
         format!(
@@ -440,10 +471,12 @@ What I know about you:
         format!("\nPersonality: {}\n", persona_block.trim())
     };
 
+    let agent_loop_block = agent_loop_prompt_block(agent_step, agent_max_steps);
+
     format!(
         r#"You are WALLE, a desktop AI companion for {user_name}.
 You are compact, direct, and efficient. Max 2 sentences per response.
-{persona_section}{context_block}{git_context_block}{memory_section}
+{agent_loop_block}{persona_section}{context_block}{git_context_block}{memory_section}
 Available plugins:
 {plugin_list}
 
@@ -454,7 +487,7 @@ Saved workflows:
 Mode: {mode}
 Time: {time}
 
-To save a workflow, use plugin "save_workflow".
+{shell_execute_note}{git_unavailable}To save a workflow, use plugin "save_workflow".
 To run a saved workflow, use plugin "run_workflow".
 For recurring tasks, use schedule_create with standard 5-field cron (minute hour day month weekday), e.g. "0 9 * * 1-5" = weekdays 9:00. Use schedule_list / schedule_delete to manage.
 Example trigger phrases: "save this as X", "run X", "start X", "every morning at 8", "remind me weekdays at 5pm"
@@ -468,14 +501,16 @@ Respond ONLY with valid JSON - no markdown, no explanation:
   "emotion": "idle|thinking|happy|sad|alert|focused|sleeping",
   "actions": [
     {{
-      "plugin": "{plugin_union}",
+      "plugin": "run_workflow",
       "label": "plain english description",
       "risk": "low|medium|high",
-      "params": {{}}
+      "params": {{ "name": "example_workflow_name" }}
     }}
   ],
   "requires_approval": false{json_memories}
 }}
+
+Each action's "plugin" must be ONE name only (e.g. "shell", "run_workflow", "app_launch") — never a pipe-separated list. The line above is an example shape; use the real plugin name and params for the user's request.
 
 Params MUST use these exact keys:
 {shell_param_doc}
@@ -490,19 +525,19 @@ Params MUST use these exact keys:
 {git_params}{memories_rules}
 
 If mode is manual_review, set requires_approval to true whenever actions are present.
-If no action is needed, return an empty actions array.
+If no plugin fits (no command to run, no app to open, no notification, no workflow, etc.), return an empty actions array.
 Always set a valid emotion. Default to "idle" if nothing else fits."#,
         user_name = user_name,
+        agent_loop_block = agent_loop_block,
         persona_section = persona_section,
         context_block = context_block,
         git_context_block = git_context_block,
         dev_git_hint = if git_prompt {
-            "\nWhen [GIT CONTEXT] appears above, use the Repo path as repo_path for git_* plugins unless the user specifies another directory.\n"
+            "\nWhen [GIT CONTEXT] appears above, use the Repo path as repo_path for git_* plugins unless the user specifies another directory.\nIf [GIT CONTEXT] is absent, use repo_path from the user's message or ask once for the absolute path to the repository root before running git_*.\n"
         } else {
             ""
         },
         memory_section = memory_section,
-        plugin_union = plugin_union,
         git_params = git_params,
         plugin_list = plugin_list,
         workflow_list = workflow_list,
@@ -512,6 +547,8 @@ Always set a valid emotion. Default to "idle" if nothing else fits."#,
         time = chrono::Local::now().to_string(),
         os_shell_line = runtime_os_shell_line(),
         shell_param_doc = shell_param_doc_line(),
+        shell_execute_note = shell_execute_note,
+        git_unavailable = git_unavailable,
     )
 }
 
@@ -571,6 +608,8 @@ pub async fn walle_complete(
     active_window_title: Option<&str>,
     clipboard_preview: Option<&str>,
     git_repo_path: Option<&str>,
+    agent_step: Option<u32>,
+    agent_max_steps: Option<u32>,
 ) -> Result<WalleCompletion, String> {
     let cfg_str = config::read_config_string(app)?;
     let parsed: AppConfig = serde_json::from_str(&cfg_str).map_err(|e| e.to_string())?;
@@ -617,6 +656,8 @@ pub async fn walle_complete(
         &context_block,
         &git_context_block,
         persona_block,
+        agent_step,
+        agent_max_steps,
     );
 
     let mut combined: Vec<ChatHistoryItem> = history.to_vec();

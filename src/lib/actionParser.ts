@@ -49,6 +49,25 @@ function extractJsonObject(raw: string): string {
   throw new SyntaxError("Unbalanced braces in model JSON");
 }
 
+/** Models sometimes copy the prompt's "allowed plugins" union as the plugin field; fix using params. */
+function normalizePluginField(raw: string, params: Record<string, unknown>): string {
+  const s = String(raw ?? "").trim();
+  if (!s.includes("|")) return s || "notify";
+  if (params.command != null) return "shell";
+  if (
+    params.name != null &&
+    typeof params.name === "string" &&
+    params.steps == null &&
+    !params.cron_expr &&
+    !params.cronExpr
+  ) {
+    return "run_workflow";
+  }
+  if (params.app != null) return "app_launch";
+  const parts = s.split("|").map((x) => x.trim()).filter(Boolean);
+  return parts[0] ?? "notify";
+}
+
 export function parsePlan(raw: string): WallePlan {
   const clean = raw.replace(/```json|```/g, "").trim();
   const jsonSlice = extractJsonObject(clean);
@@ -56,11 +75,13 @@ export function parsePlan(raw: string): WallePlan {
   const actionsRaw = Array.isArray(parsed.actions) ? parsed.actions : [];
   const actions: WalleAction[] = actionsRaw.map((a) => {
     const o = a as Record<string, unknown>;
+    const params = (o.params as Record<string, unknown>) ?? {};
+    const pluginRaw = String(o.plugin ?? "notify");
     return {
-      plugin: String(o.plugin ?? "notify"),
+      plugin: normalizePluginField(pluginRaw, params),
       label: String(o.label ?? ""),
       risk: (o.risk as WalleAction["risk"]) ?? "low",
-      params: (o.params as Record<string, unknown>) ?? {},
+      params,
     };
   });
   return {

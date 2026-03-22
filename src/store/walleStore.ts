@@ -33,6 +33,7 @@ export interface LLMUsage {
 /** Live narration steps when “Show your work” is enabled. */
 export type WorkStepKind =
   | "work:thinking"
+  | "work:iteration"
   | "work:action"
   | "work:success"
   | "work:output"

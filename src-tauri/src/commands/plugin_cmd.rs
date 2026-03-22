@@ -48,14 +48,6 @@ fn assert_builtin_enabled(app: &AppHandle, plugin: &str) -> Result<(), String> {
 
 fn assert_git_plugins_allowed(app: &AppHandle) -> Result<(), String> {
     let v = config::read_config_json(app)?;
-    let dev_on = v
-        .get("developer_mode")
-        .and_then(|d| d.get("enabled"))
-        .and_then(|x| x.as_bool())
-        .unwrap_or(false);
-    if !dev_on {
-        return Err("Git plugins require developer mode in config".into());
-    }
     let arr = v
         .get("plugins")
         .and_then(|p| p.get("enabled"))

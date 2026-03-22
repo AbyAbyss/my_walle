@@ -6,7 +6,7 @@ import { detectRepoFromWindow } from "./gitParser";
 export interface WalleContextPayload {
   activeWindowTitle: string | null;
   clipboardPreview: string | null;
-  /** Resolved when developer mode + auto-detect + inject are enabled in config. */
+  /** Resolved when git plugin is on and watch_dir + window title allow detection (see get_walle_config). */
   gitRepoPath: string | null;
 }
 
@@ -27,16 +27,23 @@ export async function fetchWalleContextForLlm(): Promise<WalleContextPayload> {
 
     let gitRepoPath: string | null = null;
     try {
-      const cfg = JSON.parse(raw) as { developer_mode?: DeveloperModeConfig };
+      const cfg = JSON.parse(raw) as {
+        developer_mode?: DeveloperModeConfig;
+        plugins?: { enabled?: string[] };
+      };
+      const plugins = cfg.plugins?.enabled;
+      const gitPluginOn =
+        !plugins || plugins.length === 0 || plugins.includes("git");
       const dm = cfg.developer_mode;
+      const watchDir =
+        typeof dm?.watch_dir === "string" ? dm.watch_dir.trim() : "";
       if (
-        dm?.enabled &&
-        dm.inject_git_status !== false &&
-        dm.auto_detect_repo !== false &&
-        typeof dm.watch_dir === "string" &&
-        dm.watch_dir.trim()
+        gitPluginOn &&
+        watchDir &&
+        dm?.inject_git_status !== false &&
+        dm?.auto_detect_repo !== false
       ) {
-        gitRepoPath = detectRepoFromWindow(active ?? "", dm.watch_dir.trim());
+        gitRepoPath = detectRepoFromWindow(active ?? "", watchDir);
       }
     } catch {
       /* ignore bad config */
