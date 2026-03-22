@@ -15,11 +15,21 @@ fn launch_app_impl(app_name: &str) -> Result<(), std::io::Error> {
     Ok(())
 }
 
-#[cfg(not(any(target_os = "windows", target_os = "macos")))]
+#[cfg(target_os = "linux")]
+fn launch_app_impl(app_name: &str) -> Result<(), std::io::Error> {
+    Command::new("xdg-open").arg(app_name).spawn()?;
+    Ok(())
+}
+
+#[cfg(not(any(
+    target_os = "windows",
+    target_os = "macos",
+    target_os = "linux"
+)))]
 fn launch_app_impl(_app_name: &str) -> Result<(), std::io::Error> {
     Err(std::io::Error::new(
         std::io::ErrorKind::Unsupported,
-        "app_launch is only wired for Windows and macOS; use the shell plugin on this platform",
+        "app_launch is not wired for this platform; use the shell plugin",
     ))
 }
 

@@ -2,7 +2,7 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
   "description": "WALLE windows — mascot, setup, chat",
-  "windows": ["mascot", "setup", "chat", "settings"],
+  "windows": ["mascot", "setup", "chat", "settings", "insights"],
   "permissions": [
     "core:default",
     "opener:default",
@@ -49,6 +49,11 @@
     "allow-git-commands",
     "allow-save-plugins-enabled",
     "allow-save-workflows-bulk",
-    "allow-external-plugins-list"
+    "allow-external-plugins-list",
+    "allow-trust",
+    "allow-learning-patterns",
+    "allow-marketplace",
+    "allow-recorder",
+    "allow-insights-window"
   ]
 }

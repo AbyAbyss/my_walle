@@ -101,3 +101,34 @@ commands.allow = ["save_workflows_to_config"]
 [[permission]]
 identifier = "allow-external-plugins-list"
 commands.allow = ["list_external_plugin_manifests", "get_user_plugins_dir_cmd"]
+
+[[permission]]
+identifier = "allow-trust"
+commands.allow = [
+  "trust_get_for_action",
+  "trust_record_user_decision",
+  "trust_list",
+  "trust_reset_score",
+  "trust_set_pinned",
+]
+
+[[permission]]
+identifier = "allow-learning-patterns"
+commands.allow = [
+  "pattern_accept",
+  "pattern_dismiss",
+  "proactive_watcher_dismiss",
+  "patterns_list",
+]
+
+[[permission]]
+identifier = "allow-marketplace"
+commands.allow = ["marketplace_search"]
+
+[[permission]]
+identifier = "allow-recorder"
+commands.allow = ["recorder_start", "recorder_stop", "recorder_is_active"]
+
+[[permission]]
+identifier = "allow-insights-window"
+commands.allow = ["open_insights_window"]

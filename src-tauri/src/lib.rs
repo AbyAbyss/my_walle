@@ -3,6 +3,8 @@ mod commands;
 mod config;
 mod keychain;
 mod memory;
+mod persona;
+mod plugins;
 mod windows;
 
 use serde_json::json;
@@ -19,9 +21,9 @@ pub fn run() {
         .setup(|app| {
             let handle = app.handle().clone();
             let pool = tauri::async_runtime::block_on(memory::db::init_db(&handle))?;
-            let pool_sched = pool.clone();
-            app.manage(pool);
-            commands::start_scheduler(handle.clone(), pool_sched);
+            app.manage(pool.clone());
+            commands::start_scheduler(handle.clone(), pool.clone());
+            crate::agent::proactive::start_proactive_loop(handle.clone(), pool.clone());
             config::ensure_config_exists(&handle)?;
 
             let provider = agent::llm::current_provider_name(&handle)
@@ -81,6 +83,20 @@ pub fn run() {
             commands::save_workflows_to_config,
             commands::list_external_plugin_manifests,
             commands::get_user_plugins_dir_cmd,
+            commands::trust_get_for_action,
+            commands::trust_record_user_decision,
+            commands::trust_list,
+            commands::trust_reset_score,
+            commands::trust_set_pinned,
+            commands::pattern_accept,
+            commands::pattern_dismiss,
+            commands::proactive_watcher_dismiss,
+            commands::patterns_list,
+            commands::marketplace_search,
+            commands::recorder_start,
+            commands::recorder_stop,
+            commands::recorder_is_active,
+            commands::open_insights_window,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
@@ -116,6 +132,16 @@ fn register_global_shortcuts(handle: tauri::AppHandle) -> anyhow::Result<()> {
         .on_shortcut(show_work, move |app, _shortcut, event| {
             if event.state == ShortcutState::Pressed {
                 let _ = app.emit_to("chat", "walle/toggle-show-work", json!(null));
+            }
+        })
+        .map_err(|e| anyhow::anyhow!(e))?;
+
+    let insights = Shortcut::new(Some(Modifiers::CONTROL | Modifiers::SHIFT), Code::KeyI);
+    let h4 = handle.clone();
+    h4.global_shortcut()
+        .on_shortcut(insights, move |app, _shortcut, event| {
+            if event.state == ShortcutState::Pressed {
+                let _ = windows::create_insights_window(app);
             }
         })
         .map_err(|e| anyhow::anyhow!(e))?;

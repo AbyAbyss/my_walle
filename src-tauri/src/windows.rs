@@ -108,6 +108,25 @@ pub fn create_chat_window(app: &AppHandle, visible: bool) -> Result<(), String> 
     Ok(())
 }
 
+/// Insights dashboard (Phase 3).
+pub fn create_insights_window(app: &AppHandle) -> Result<(), String> {
+    if let Some(w) = app.get_webview_window("insights") {
+        w.show().map_err(|e| e.to_string())?;
+        w.set_focus().map_err(|e| e.to_string())?;
+        return Ok(());
+    }
+    WebviewWindowBuilder::new(app, "insights", WebviewUrl::App("insights.html".into()))
+        .title("WALLE Insights")
+        .inner_size(900.0, 620.0)
+        .resizable(true)
+        .center()
+        .transparent(true)
+        .shadow(true)
+        .build()
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
 /// Settings: glass panel, hidden until opened from chat.
 pub fn create_settings_window(app: &AppHandle) -> Result<(), String> {
     if app.get_webview_window("settings").is_some() {

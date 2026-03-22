@@ -2,6 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { useMultiAgent } from "../../hooks/useMultiAgent";
 import { useWalle } from "../../hooks/useWalle";
 import { useWalleContext } from "../../hooks/useWalleContext";
 import { getChatSessionId } from "../../lib/chatSession";
@@ -11,6 +12,7 @@ import {
   type ConversationRowPayload,
 } from "../../lib/persistConversation";
 import { normalizeWorkflowsFromConfig } from "../../lib/workflowsFromConfig";
+import { commandSummaryForTrust, fetchTrustForAction, type TrustScoreRow } from "../../lib/trustScore";
 import { normalizeUserLevel, saveUiPreferences } from "../../lib/uiPreferences";
 import type { LLMUsage } from "../../store/walleStore";
 import { useWalleStore } from "../../store/walleStore";
@@ -80,12 +82,14 @@ export default function ChatPanel() {
   const setMessages = useWalleStore((s) => s.setMessages);
   const setShowWorkEnabled = useWalleStore((s) => s.setShowWorkEnabled);
   const { sendMessage } = useWalle();
+  const { chainRows } = useMultiAgent();
   const { refresh: refreshContext } = useWalleContext();
   const [voiceTick, setVoiceTick] = useState(0);
   const [configSnapshot, setConfigSnapshot] = useState<ChatConfigSnapshot | null>(null);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const firstOpenWaveRef = useRef(false);
   const restoredChatRef = useRef(false);
+  const [approvalTrust, setApprovalTrust] = useState<TrustScoreRow | null>(null);
 
   const loadConfig = useCallback(async () => {
     try {
@@ -97,7 +101,11 @@ export default function ChatPanel() {
       }
       setWorkflows(normalizeWorkflowsFromConfig(parsed));
       setConfigSnapshot(parsed);
-      setShowWorkEnabled(parsed.show_work === true);
+      const showWorkOn = parsed.show_work === true;
+      setShowWorkEnabled(showWorkOn);
+      if (!showWorkOn) {
+        useWalleStore.getState().clearWorkSteps();
+      }
       setShowOnboarding(parsed.onboarding_complete === false);
 
       const today = new Date().toDateString();
@@ -118,6 +126,21 @@ export default function ChatPanel() {
   useEffect(() => {
     void loadConfig();
   }, [loadConfig]);
+
+  useEffect(() => {
+    if (!pendingAction) {
+      setApprovalTrust(null);
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      const t = await fetchTrustForAction(pendingAction);
+      if (!cancelled) setApprovalTrust(t);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [pendingAction]);
 
   useEffect(() => {
     void refreshContext();
@@ -193,7 +216,11 @@ export default function ChatPanel() {
           const next = await invoke<string>("get_walle_config");
           const updated = JSON.parse(next) as ChatConfigSnapshot;
           setConfigSnapshot(updated);
-          setShowWorkEnabled(updated.show_work === true);
+          const on = updated.show_work === true;
+          setShowWorkEnabled(on);
+          if (!on) {
+            useWalleStore.getState().clearWorkSteps();
+          }
         } catch {
           /* ignore */
         }
@@ -274,15 +301,60 @@ export default function ChatPanel() {
 
       <MessageList messages={messages} />
 
-      <ShowWorkPanel enabled={configSnapshot?.show_work === true} />
+      {chainRows.length > 0 && (
+        <div
+          className="px-3 py-2 text-[11px] shrink-0 border-b max-h-32 overflow-y-auto"
+          style={{
+            borderColor: "var(--walle-glass-border)",
+            color: "var(--walle-text-secondary)",
+            fontFamily: "var(--walle-font-mono)",
+          }}
+        >
+          <div className="font-medium mb-1" style={{ color: "var(--walle-cyan)" }}>
+            Chain progress
+          </div>
+          {chainRows.map((r) => (
+            <div key={r.id} className="mb-1">
+              {r.status === "running" ? "↻" : "✓"} {r.id}: {r.goal ?? r.output ?? ""}
+            </div>
+          ))}
+        </div>
+      )}
+
+      <ShowWorkPanel />
 
       {pendingAction && (
         <div className="px-3 shrink-0">
           <ActionCard
             action={pendingAction}
             userLevel={userLevel}
-            onApprove={() => resolveApproval(true)}
-            onDeny={() => resolveApproval(false)}
+            trust={approvalTrust}
+            onApprove={() => {
+              const a = pendingAction;
+              if (a) {
+                void invoke("trust_record_user_decision", {
+                  payload: {
+                    plugin: a.plugin,
+                    commandSummary: commandSummaryForTrust(a),
+                    approved: true,
+                  },
+                });
+              }
+              resolveApproval(true);
+            }}
+            onDeny={() => {
+              const a = pendingAction;
+              if (a) {
+                void invoke("trust_record_user_decision", {
+                  payload: {
+                    plugin: a.plugin,
+                    commandSummary: commandSummaryForTrust(a),
+                    approved: false,
+                  },
+                });
+              }
+              resolveApproval(false);
+            }}
           />
         </div>
       )}

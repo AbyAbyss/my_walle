@@ -47,7 +47,28 @@ fn active_window_impl() -> Option<String> {
     }
 }
 
-#[cfg(not(any(target_os = "windows", target_os = "macos")))]
+#[cfg(target_os = "linux")]
+fn active_window_impl() -> Option<String> {
+    let output = std::process::Command::new("xdotool")
+        .args(["getactivewindow", "getwindowname"])
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let s = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    if s.is_empty() {
+        None
+    } else {
+        Some(s)
+    }
+}
+
+#[cfg(not(any(
+    target_os = "windows",
+    target_os = "macos",
+    target_os = "linux"
+)))]
 fn active_window_impl() -> Option<String> {
     None
 }

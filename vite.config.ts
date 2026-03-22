@@ -20,6 +20,7 @@ export default defineConfig(async () => ({
         setup: resolve(__dirname, "setup.html"),
         chat: resolve(__dirname, "chat.html"),
         settings: resolve(__dirname, "settings.html"),
+        insights: resolve(__dirname, "insights.html"),
       },
     },
   },

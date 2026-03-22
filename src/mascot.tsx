@@ -1,9 +1,12 @@
+import { AnimatePresence } from "framer-motion";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import ReactDOM from "react-dom/client";
 import EmotionEngine from "./components/Mascot/EmotionEngine";
+import SuggestionBubble from "./components/Suggestions/SuggestionBubble";
 import MascotWindow from "./windows/MascotWindow";
+import { useLearning } from "./hooks/useLearning";
 import type { Animation } from "./lib/animation";
 import { normalizeAnimation } from "./lib/animation";
 import { EMOTIONS, type Emotion } from "./lib/emotion";
@@ -15,6 +18,9 @@ function MascotRoot() {
   const [emotion, setEmotion] = useState<Emotion>("idle");
   const [animation, setAnimation] = useState<Animation>("none");
   const prevEmotionRef = useRef<Emotion>("idle");
+  const learningDismissSeconds = 30;
+  const { pendingSuggestion, accept, dismiss } = useLearning(learningDismissSeconds);
+  const patternEmotionLock = useRef(false);
 
   const hydrateActiveMascot = useCallback(async () => {
     try {
@@ -63,6 +69,16 @@ function MascotRoot() {
     prevEmotionRef.current = emotion;
   }, [emotion]);
 
+  useEffect(() => {
+    if (pendingSuggestion) {
+      patternEmotionLock.current = true;
+      setEmotion("alert");
+    } else if (patternEmotionLock.current) {
+      patternEmotionLock.current = false;
+      setEmotion("idle");
+    }
+  }, [pendingSuggestion]);
+
   const onAnimationComplete = useCallback(() => {
     setAnimation("none");
   }, []);
@@ -92,12 +108,38 @@ function MascotRoot() {
 
   return (
     <MascotWindow emotion={emotion} animation={animation}>
-      <EmotionEngine
-        emotion={emotion}
-        animation={animation}
-        onAnimationComplete={onAnimationComplete}
-        onPet={handlePet}
-      />
+      <div style={{ position: "relative", width: "100%", height: "100%" }}>
+        <AnimatePresence>
+          {pendingSuggestion && (
+            <div
+              key={pendingSuggestion.id}
+              style={{
+                position: "absolute",
+                left: 0,
+                right: 0,
+                bottom: "100%",
+                marginBottom: 8,
+                zIndex: 50,
+                display: "flex",
+                justifyContent: "center",
+                pointerEvents: "auto",
+              }}
+            >
+              <SuggestionBubble
+                pattern={pendingSuggestion}
+                onAccept={() => void accept(pendingSuggestion)}
+                onDismiss={() => void dismiss(pendingSuggestion)}
+              />
+            </div>
+          )}
+        </AnimatePresence>
+        <EmotionEngine
+          emotion={emotion}
+          animation={animation}
+          onAnimationComplete={onAnimationComplete}
+          onPet={handlePet}
+        />
+      </div>
     </MascotWindow>
   );
 }

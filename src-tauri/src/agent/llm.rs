@@ -172,9 +172,9 @@ fn runtime_os_shell_line() -> &'static str {
 
 fn shell_param_doc_line() -> &'static str {
     if cfg!(target_os = "windows") {
-        "- shell: {{ \"command\": \"PowerShell command string\" }}"
+        "- shell: {{ \"command\": \"PowerShell command string\" }}\n- chain: {{ \"agents\": [ {{ \"id\": \"a1\", \"goal\": \"sub-task\", \"depends_on\": [] }} ] }}"
     } else {
-        "- shell: {{ \"command\": \"shell command string\" }}"
+        "- shell: {{ \"command\": \"shell command string\" }}\n- chain: {{ \"agents\": [ {{ \"id\": \"a1\", \"goal\": \"sub-task\", \"depends_on\": [] }} ] }}"
     }
 }
 
@@ -376,6 +376,7 @@ fn build_system_prompt(
     memory_block: &str,
     context_block: &str,
     git_context_block: &str,
+    persona_block: &str,
 ) -> String {
     let user_name = config
         .user
@@ -391,9 +392,9 @@ fn build_system_prompt(
     let plugin_list = build_plugin_list(config);
     let git_prompt = developer_mode_enabled(config) && git_plugins_allowed_in_config(config);
     let plugin_union = if git_prompt {
-        "shell|app_launch|notify|save_workflow|run_workflow|schedule_create|schedule_list|schedule_delete|git_status|git_log|git_diff|git_commit|git_push|git_checkout"
+        "shell|app_launch|notify|save_workflow|run_workflow|schedule_create|schedule_list|schedule_delete|git_status|git_log|git_diff|git_commit|git_push|git_checkout|chain"
     } else {
-        "shell|app_launch|notify|save_workflow|run_workflow|schedule_create|schedule_list|schedule_delete"
+        "shell|app_launch|notify|save_workflow|run_workflow|schedule_create|schedule_list|schedule_delete|chain"
     };
     let git_params = if git_prompt {
         r#"- git_status: {{ "repo_path": "absolute path to .git parent" }}
@@ -433,10 +434,16 @@ What I know about you:
         ""
     };
 
+    let persona_section = if persona_block.trim().is_empty() {
+        String::new()
+    } else {
+        format!("\nPersonality: {}\n", persona_block.trim())
+    };
+
     format!(
         r#"You are WALLE, a desktop AI companion for {user_name}.
 You are compact, direct, and efficient. Max 2 sentences per response.
-{context_block}{git_context_block}{memory_section}
+{persona_section}{context_block}{git_context_block}{memory_section}
 Available plugins:
 {plugin_list}
 
@@ -486,6 +493,7 @@ If mode is manual_review, set requires_approval to true whenever actions are pre
 If no action is needed, return an empty actions array.
 Always set a valid emotion. Default to "idle" if nothing else fits."#,
         user_name = user_name,
+        persona_section = persona_section,
         context_block = context_block,
         git_context_block = git_context_block,
         dev_git_hint = if git_prompt {
@@ -600,12 +608,15 @@ pub async fn walle_complete(
     };
     let context_block = format_context_for_prompt(&parsed, active_window_title, clipboard_preview);
     let git_context_block = build_git_context_section(&parsed, git_repo_path).await;
+    let persona_extra = crate::persona::personality_modifier(&app);
+    let persona_block = persona_extra.as_deref().unwrap_or("");
     let system = build_system_prompt(
         &parsed,
         memory_on,
         &memory_display,
         &context_block,
         &git_context_block,
+        persona_block,
     );
 
     let mut combined: Vec<ChatHistoryItem> = history.to_vec();
@@ -640,6 +651,59 @@ pub async fn walle_complete(
         apply_memories_from_llm_response(&pool, &response.content).await;
     }
 
+    Ok(WalleCompletion {
+        raw: response.content,
+        model: response.model,
+        input_tokens: response.input_tokens,
+        output_tokens: response.output_tokens,
+    })
+}
+
+/// Minimal LLM call for multi-agent sub-tasks (no memory injection).
+pub async fn chain_sub_agent_completion(
+    app: &AppHandle,
+    goal: &str,
+    dependency_context: &str,
+) -> Result<WalleCompletion, String> {
+    let cfg_str = config::read_config_string(app)?;
+    let parsed: AppConfig = serde_json::from_str(&cfg_str).map_err(|e| e.to_string())?;
+    let provider = parsed.llm.provider_name().to_string();
+    let adapter = get_adapter(&provider)?;
+    if !adapter.is_configured(&provider, &parsed.llm) {
+        return Err("LLM not configured for chain".into());
+    }
+    let api_key = if adapter.requires_api_key(&provider) {
+        Some(keychain::get_api_key_for_provider(&provider)?)
+    } else {
+        None
+    };
+    let model = select_model(goal, &parsed.llm);
+    let system = format!(
+        "You are a sub-agent in WALLE. Answer concisely with plain text only. No JSON.\n\
+         Dependency outputs from other agents:\n{}",
+        if dependency_context.trim().is_empty() {
+            "(none)"
+        } else {
+            dependency_context
+        }
+    );
+    let messages = vec![LLMMessage {
+        role: "user".into(),
+        content: goal.to_string(),
+    }];
+    let response = adapter
+        .call(
+            &LLMRequest {
+                model: model.clone(),
+                messages,
+                system: Some(system),
+                max_tokens: parsed.llm.max_tokens_value().min(2048),
+                temperature: parsed.llm.temperature_value(),
+                base_url: resolve_base_url(&provider, &parsed.llm),
+            },
+            api_key.as_deref(),
+        )
+        .await?;
     Ok(WalleCompletion {
         raw: response.content,
         model: response.model,

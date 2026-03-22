@@ -9,6 +9,11 @@ pub fn toggle_chat_window(app: AppHandle) -> Result<bool, String> {
 }
 
 #[tauri::command]
+pub fn open_insights_window(app: AppHandle) -> Result<(), String> {
+    windows::create_insights_window(&app)
+}
+
+#[tauri::command]
 pub fn open_settings_window(app: AppHandle) -> Result<(), String> {
     if app.get_webview_window("settings").is_none() {
         windows::create_settings_window(&app)?;

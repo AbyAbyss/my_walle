@@ -11,6 +11,7 @@ import { parsePlan } from "../lib/actionParser";
 import { formatPluginResult } from "../lib/pluginResultFormat";
 import type { Emotion } from "../lib/emotion";
 import { needsApproval } from "../lib/riskClassifier";
+import { fetchTrustForAction } from "../lib/trustScore";
 import { emitMascotAnimation } from "../lib/mascotBridge";
 import { fetchWalleContextForLlm } from "../lib/fetchContext";
 import {
@@ -331,15 +332,13 @@ async function executeActionPlan(plan: WallePlan, mode: "auto" | "manual_review"
   const store = useWalleStore.getState();
   const actions = plan.actions;
   if (!actions.length) {
-    if (await getShowWorkEnabled()) {
-      store.clearWorkSteps();
-    }
+    store.clearWorkSteps();
     return;
   }
 
   const showWork = await getShowWorkEnabled();
+  store.clearWorkSteps();
   if (showWork) {
-    store.clearWorkSteps();
     pushWork(
       showWork,
       "work:thinking",
@@ -352,7 +351,8 @@ async function executeActionPlan(plan: WallePlan, mode: "auto" | "manual_review"
 
   for (let i = 0; i < actions.length; i++) {
     const action = actions[i];
-    const needApproval = plan.requires_approval || needsApproval(action, mode);
+    const trust = await fetchTrustForAction(action);
+    const needApproval = plan.requires_approval || needsApproval(action, mode, trust);
 
     if (needApproval) {
       if (autoBatchSummarize && (await getAutoSummarizeEnabled())) {

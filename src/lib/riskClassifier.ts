@@ -1,4 +1,6 @@
 import type { WalleAction } from "./actionParser";
+import type { TrustScoreRow } from "./trustScore";
+import { shouldAutoExecute } from "./trustScore";
 
 export type RiskLevel = "safe" | "moderate" | "dangerous";
 
@@ -98,6 +100,9 @@ function actionProbe(a: WalleAction): string {
 
 export function effectiveRisk(action: WalleAction): RiskLevel {
   const llm = llmRiskToLevel(action.risk);
+  if (action.plugin === "chain") {
+    return mergeRisk(llm, "moderate");
+  }
   const enforced = classifyRisk(actionProbe(action));
   return mergeRisk(llm, enforced);
 }
@@ -105,6 +110,7 @@ export function effectiveRisk(action: WalleAction): RiskLevel {
 export function needsApproval(
   action: WalleAction,
   mode: "auto" | "manual_review",
+  trust?: TrustScoreRow | null,
 ): boolean {
   // Saved workflows are user-defined; running them is an explicit request — do not
   // block on a second "Allow" click (that felt like "nothing happens").
@@ -116,7 +122,12 @@ export function needsApproval(
 
   const effective = effectiveRisk(action);
   if (effective === "dangerous") return true;
-  if (effective === "moderate") return true;
-  if (effective === "safe" && mode === "manual_review") return true;
-  return false;
+  if (mode === "manual_review") {
+    if (effective === "moderate") return true;
+    if (effective === "safe") return true;
+    return false;
+  }
+  // auto: trust-aware gate for moderate + safe
+  if (trust?.pinned === "blacklist") return true;
+  return !shouldAutoExecute(effective, trust ?? null);
 }

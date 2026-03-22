@@ -13,7 +13,9 @@ use crate::commands::scheduler;
 use crate::commands::notify::{parse_notify_delay_secs, send_notify, spawn_delayed_notify};
 use crate::commands::shell::shell_run;
 use crate::commands::user_plugins::{self, ExternalManifestDto};
+use crate::agent::learning;
 use crate::config;
+use crate::memory::task_outcomes;
 
 fn is_builtin_plugin_enabled(app: &AppHandle, plugin: &str) -> Result<bool, String> {
     const BUILTINS: &[&str] = &["shell", "app_launch", "notify"];
@@ -69,6 +71,53 @@ fn assert_git_plugins_allowed(app: &AppHandle) -> Result<(), String> {
         return Err("The git plugin is disabled in Settings → Plugins".into());
     }
     Ok(())
+}
+
+/// Shell / external plugins can return HTTP OK JSON with non-zero `exit_code`.
+fn semantic_success(plugin: &str, result: &Result<serde_json::Value, String>) -> bool {
+    match result {
+        Err(_) => false,
+        Ok(v) => match plugin {
+            "shell" | "external" | "ext_shell" => v
+                .get("exit_code")
+                .and_then(|x| x.as_i64())
+                .map(|c| c == 0)
+                .unwrap_or(true),
+            _ => true,
+        },
+    }
+}
+
+async fn finish_with_outcome(
+    app: &AppHandle,
+    pool: &SqlitePool,
+    plugin: &str,
+    command: &str,
+    result: Result<serde_json::Value, String>,
+) -> Result<serde_json::Value, String> {
+    let success = semantic_success(plugin, &result);
+    let err = result.as_ref().err().map(|s| s.as_str());
+    task_outcomes::record_task_outcome(pool, plugin, command, success, err).await;
+    learning::schedule_scan(app.clone(), pool.clone());
+    result
+}
+
+async fn dispatch_simple_plugin_recorded(
+    app: &AppHandle,
+    pool: &SqlitePool,
+    action: PluginAction,
+) -> Result<serde_json::Value, String> {
+    let plugin = action.plugin.clone();
+    let cmd = task_outcomes::params_summary(&action.params);
+    if crate::plugins::recorder::is_recording() {
+        crate::plugins::recorder::record_step(action.label.clone(), plugin.clone(), Some(cmd.clone()));
+    }
+    let res = dispatch_simple_plugin(app, action).await;
+    let success = semantic_success(&plugin, &res);
+    let err = res.as_ref().err().map(|s| s.as_str());
+    task_outcomes::record_task_outcome(pool, &plugin, &cmd, success, err).await;
+    learning::schedule_scan(app.clone(), pool.clone());
+    res
 }
 
 async fn plugin_external_run(app: &AppHandle, params: &serde_json::Value) -> Result<serde_json::Value, String> {
@@ -286,17 +335,36 @@ async fn plugin_schedule_delete(
 
 #[tauri::command]
 pub async fn run_plugin_action(app: AppHandle, action: PluginAction) -> Result<serde_json::Value, String> {
-    let pool = app.state::<SqlitePool>();
+    let pool = app.state::<SqlitePool>().inner().clone();
     match action.plugin.as_str() {
-        "schedule_create" => plugin_schedule_create(&pool, &action.params).await,
-        "schedule_list" => plugin_schedule_list(&pool).await,
-        "schedule_delete" => plugin_schedule_delete(&pool, &action.params).await,
-        "external" | "ext_shell" => plugin_external_run(&app, &action.params).await,
-        "run_workflow" => {
-            let summary = run_workflow_impl(&app, &action.params).await?;
-            Ok(json!({ "ok": true, "summary": summary }))
+        "schedule_create" => {
+            let cmd = task_outcomes::params_summary(&action.params);
+            let r = plugin_schedule_create(&pool, &action.params).await;
+            finish_with_outcome(&app, &pool, "schedule_create", &cmd, r).await
         }
-        _ => dispatch_simple_plugin(&app, action).await,
+        "schedule_list" => {
+            let r = plugin_schedule_list(&pool).await;
+            finish_with_outcome(&app, &pool, "schedule_list", "{}", r).await
+        }
+        "schedule_delete" => {
+            let cmd = task_outcomes::params_summary(&action.params);
+            let r = plugin_schedule_delete(&pool, &action.params).await;
+            finish_with_outcome(&app, &pool, "schedule_delete", &cmd, r).await
+        }
+        "external" | "ext_shell" => {
+            let cmd = task_outcomes::params_summary(&action.params);
+            let r = plugin_external_run(&app, &action.params).await;
+            finish_with_outcome(&app, &pool, "external", &cmd, r).await
+        }
+        "run_workflow" => run_workflow_impl(&app, &pool, &action.params).await.map(|summary| {
+            json!({ "ok": true, "summary": summary })
+        }),
+        "chain" => {
+            let cmd = task_outcomes::params_summary(&action.params);
+            let r = crate::agent::multi_agent::run_chain(&app, &action.params).await;
+            finish_with_outcome(&app, &pool, "chain", &cmd, r).await
+        },
+        _ => dispatch_simple_plugin_recorded(&app, &pool, action).await,
     }
 }
 
@@ -329,7 +397,11 @@ fn action_delay_ms(app: &AppHandle) -> u64 {
         .unwrap_or(600)
 }
 
-async fn run_workflow_impl(app: &AppHandle, params: &serde_json::Value) -> Result<String, String> {
+async fn run_workflow_impl(
+    app: &AppHandle,
+    pool: &SqlitePool,
+    params: &serde_json::Value,
+) -> Result<String, String> {
     let name = params
         .get("name")
         .and_then(|n| n.as_str())
@@ -369,7 +441,7 @@ async fn run_workflow_impl(app: &AppHandle, params: &serde_json::Value) -> Resul
             }
             continue;
         }
-        match dispatch_simple_plugin(app, action).await {
+        match dispatch_simple_plugin_recorded(app, pool, action).await {
             Ok(j) => lines.push(format!("{}: {}", label, j)),
             Err(e) => lines.push(format!("{} FAILED: {}", label, e)),
         }

@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
+    "build:linux": "tauri build --target x86_64-unknown-linux-gnu",
     "preview": "vite preview",
     "tauri": "tauri"
   },

@@ -1,0 +1,4 @@
+CREATE TABLE IF NOT EXISTS nudge_daily (
+    day TEXT PRIMARY KEY,
+    n   INTEGER NOT NULL DEFAULT 0
+);

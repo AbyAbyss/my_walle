@@ -58,7 +58,11 @@ function StepLine({ step }: { step: WorkStep }) {
   }
 }
 
-export default function ShowWorkPanel({ enabled }: { enabled: boolean }) {
+/**
+ * Steps are only pushed when the backend has show_work enabled, so we show whenever
+ * there are steps — not gated on React config snapshot (avoids a race before loadConfig).
+ */
+export default function ShowWorkPanel() {
   const workSteps = useWalleStore((s) => s.workSteps);
   const clearWorkSteps = useWalleStore((s) => s.clearWorkSteps);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -77,7 +81,7 @@ export default function ShowWorkPanel({ enabled }: { enabled: boolean }) {
     return () => window.clearTimeout(t);
   }, [workSteps, clearWorkSteps]);
 
-  if (!enabled || workSteps.length === 0) return null;
+  if (workSteps.length === 0) return null;
 
   return (
     <div className="px-3 shrink-0 pb-2">

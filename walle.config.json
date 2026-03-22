@@ -64,5 +64,37 @@
     "auto_detect_repo": true,
     "inject_git_status": true
   },
-  "schedules": []
+  "schedules": [],
+  "learning": {
+    "enabled": true,
+    "min_occurrences": 3,
+    "min_confidence": 0.75,
+    "suggest_while_busy": false,
+    "auto_dismiss_seconds": 30
+  },
+  "proactive": {
+    "enabled": false,
+    "quiet_hours_start": "22:00",
+    "quiet_hours_end": "08:00",
+    "max_nudges_per_day": 3,
+    "watchers": {
+      "git_uncommitted": { "enabled": false, "threshold_minutes": 120 },
+      "test_failures": { "enabled": false, "failure_threshold": 3 },
+      "long_process": { "enabled": false, "threshold_hours": 8 },
+      "idle_digest": { "enabled": false, "trigger_time": "18:00" },
+      "memory_nudge": { "enabled": false }
+    }
+  },
+  "persona": {
+    "active": "walle",
+    "tts_enabled": false,
+    "tts_provider": "system"
+  },
+  "insights": {
+    "hotkey": "Ctrl+Shift+I"
+  },
+  "marketplace": {
+    "registry_url": "https://registry.walle.dev/v1",
+    "auto_check_updates": true
+  }
 }
