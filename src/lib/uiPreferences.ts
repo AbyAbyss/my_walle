@@ -16,6 +16,8 @@ export interface UiPreferencesPatch {
   idle_wander?: boolean;
   /** Live step-by-step narration in the chat panel. */
   show_work?: boolean;
+  /** Chirps / robot bloops on mascot interactions. */
+  mascot_sounds?: boolean;
 }
 
 export async function saveUiPreferences(prefs: UiPreferencesPatch): Promise<void> {

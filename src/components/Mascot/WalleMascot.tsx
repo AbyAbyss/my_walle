@@ -2,6 +2,7 @@ import { forwardRef, useCallback, useEffect, useRef } from "react";
 
 import type { Animation } from "../../lib/animation";
 import type { Emotion } from "../../lib/emotion";
+import { playWalleAnimation } from "../../lib/mascotSounds";
 import { applyMascotEmotion } from "./mascotApplyEmotion";
 import { spawnMascotParticles } from "./mascotParticles";
 
@@ -10,9 +11,11 @@ import { spawnMascotParticles } from "./mascotParticles";
  */
 const WalleMascot = forwardRef<
   HTMLDivElement,
-  { emotion: Emotion; animation: Animation; onPet: () => void }
->(function WalleMascot({ emotion, animation, onPet }, ref) {
+  { emotion: Emotion; animation: Animation; soundsEnabled: boolean; onPet: () => void }
+>(function WalleMascot({ emotion, animation, soundsEnabled, onPet }, ref) {
   const pointerDown = useRef<{ x: number; y: number } | null>(null);
+  const prevAnimationRef = useRef<Animation>("none");
+  const prevSoundsEnabledRef = useRef(soundsEnabled);
   const particlesRef = useRef<HTMLDivElement>(null);
   const walleRef = useRef<HTMLDivElement>(null);
   const setWalleRef = useCallback(
@@ -77,6 +80,25 @@ const WalleMascot = forwardRef<
       cancelAnimationFrame(raf);
     };
   }, [animation]);
+
+  useEffect(() => {
+    if (prevSoundsEnabledRef.current === false && soundsEnabled) {
+      prevAnimationRef.current = "none";
+    }
+    prevSoundsEnabledRef.current = soundsEnabled;
+
+    if (!soundsEnabled) {
+      prevAnimationRef.current = animation;
+      return;
+    }
+    if (animation === "none") {
+      prevAnimationRef.current = animation;
+      return;
+    }
+    if (prevAnimationRef.current === animation) return;
+    prevAnimationRef.current = animation;
+    playWalleAnimation(soundsEnabled, animation);
+  }, [animation, soundsEnabled]);
 
   return (
     <div className="mascot-scene">

@@ -53,7 +53,7 @@ interface SettingsConfig {
   plugins?: { enabled?: string[] };
   developer_mode?: { enabled?: boolean };
   workflows?: WorkflowConfigItem[];
-  mascot?: { active?: string };
+  mascot?: { active?: string; sounds?: boolean };
 }
 
 type ProviderName = "anthropic" | "openai" | "ollama" | "openrouter";
@@ -336,6 +336,7 @@ export function SettingsPanelContent({ onClose }: SettingsPanelContentProps) {
   const [scheduleDeleteTarget, setScheduleDeleteTarget] = useState<{ id: number; name: string } | null>(
     null,
   );
+  const [mascotSounds, setMascotSounds] = useState(true);
 
   const refreshKeyStatus = async (nextProvider: ProviderName) => {
     if (!PROVIDER_PRESETS[nextProvider].requiresApiKey) {
@@ -385,6 +386,7 @@ export function SettingsPanelContent({ onClose }: SettingsPanelContentProps) {
         setInjectWindow(parsed.context?.inject_active_window !== false);
         setInjectClipboard(parsed.context?.inject_clipboard === true);
         setShowWork(parsed.show_work === true);
+        setMascotSounds(parsed.mascot?.sounds !== false);
         setStatus("");
         setApiKey("");
         await refreshKeyStatus(nextProvider);
@@ -492,7 +494,7 @@ export function SettingsPanelContent({ onClose }: SettingsPanelContentProps) {
         await invoke("save_provider_api_key", { provider, key: apiKey.trim() });
         setApiKey("");
       }
-      await saveUiPreferences({ user_level: userLevel, show_work: showWork });
+      await saveUiPreferences({ user_level: userLevel, show_work: showWork, mascot_sounds: mascotSounds });
       await invoke("save_context_settings", {
         settings: {
           injectActiveWindow: injectWindow,
@@ -642,6 +644,25 @@ export function SettingsPanelContent({ onClose }: SettingsPanelContentProps) {
                 {activeMascot === "dudu" ? "DuDu" : "WALLE"}
               </span>
             </p>
+            <div className="mt-4 max-w-md">
+              <ToggleTile
+                title="Mascot sounds"
+                body="Soft chirps for DuDu and little robot bloops for WALLE when they react, pet, or play animations."
+                checked={mascotSounds}
+                onChange={(next) => {
+                  setMascotSounds(next);
+                  void (async () => {
+                    try {
+                      await saveUiPreferences({ mascot_sounds: next });
+                      setStatus(next ? "Mascot sounds on." : "Mascot sounds off.");
+                      await notifyConfigChanged();
+                    } catch (e) {
+                      setStatus(String(e));
+                    }
+                  })();
+                }}
+              />
+            </div>
           </section>
         )}
 

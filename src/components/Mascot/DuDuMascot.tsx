@@ -2,6 +2,7 @@ import { forwardRef, useCallback, useEffect, useRef } from "react";
 
 import type { Animation } from "../../lib/animation";
 import type { Emotion } from "../../lib/emotion";
+import { playDuduLong, playDuduShort } from "../../lib/mascotSounds";
 import { applyDuDuEmotionDom, setDuDuCrest } from "./mascotApplyEmotionDuDu";
 import { spawnMascotParticles } from "./mascotParticles";
 
@@ -31,8 +32,8 @@ function pick<T>(arr: T[]): T {
 
 const DuDuMascot = forwardRef<
   HTMLDivElement,
-  { emotion: Emotion; animation: Animation; onPet: () => void }
->(function DuDuMascot({ emotion, animation, onPet }, ref) {
+  { emotion: Emotion; animation: Animation; soundsEnabled: boolean; onPet: () => void }
+>(function DuDuMascot({ emotion, animation, soundsEnabled, onPet }, ref) {
   const pointerDown = useRef<{ x: number; y: number } | null>(null);
   const particlesRef = useRef<HTMLDivElement>(null);
   const duduRef = useRef<HTMLDivElement>(null);
@@ -79,6 +80,7 @@ const DuDuMascot = forwardRef<
 
   const chirp = useCallback(
     (syllables: number) => {
+      playDuduShort(soundsEnabled, syllables);
       const root = duduRef.current;
       if (!root) return;
       const seq = [0.9, 0, 0.75, 0, 0.6, 0].slice(0, syllables * 2);
@@ -97,11 +99,12 @@ const DuDuMascot = forwardRef<
       };
       step();
     },
-    [setBeakTarget],
+    [setBeakTarget, soundsEnabled],
   );
 
   const longChirp = useCallback(
     (onDone?: () => void) => {
+      playDuduLong(soundsEnabled);
       const root = duduRef.current;
       if (!root) return;
       const seq = [0.85, 0, 0.7, 0, 0.9, 0, 0.5, 0, 0.75, 0];
@@ -121,7 +124,7 @@ const DuDuMascot = forwardRef<
       };
       step();
     },
-    [setBeakTarget],
+    [setBeakTarget, soundsEnabled],
   );
 
   useEffect(() => {
@@ -308,6 +311,10 @@ const DuDuMascot = forwardRef<
     if (animation === "stretch") {
       setDuDuCrest(root, "raised");
       window.setTimeout(() => chirp(2), 500);
+    }
+    if (animation === "excited_run") {
+      setDuDuCrest(root, "excited");
+      window.setTimeout(() => longChirp(), 200);
     }
     if (animation === "pet") {
       setDuDuCrest(root, "excited");

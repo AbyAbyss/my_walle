@@ -19,6 +19,7 @@ function useAnimationController(animation: Animation, onComplete: () => void) {
 interface EmotionEngineProps {
   emotion: Emotion;
   animation: Animation;
+  soundsEnabled: boolean;
   onAnimationComplete: () => void;
   onPet: () => void;
 }
@@ -26,6 +27,7 @@ interface EmotionEngineProps {
 export default function EmotionEngine({
   emotion,
   animation,
+  soundsEnabled,
   onAnimationComplete,
   onPet,
 }: EmotionEngineProps) {
@@ -41,6 +43,7 @@ export default function EmotionEngine({
       ref={mascotRef}
       emotion={emotion}
       animation={animation}
+      soundsEnabled={soundsEnabled}
       onPet={onPet}
     />
   );

@@ -75,6 +75,16 @@ export function parseActiveMascotFromConfigJson(raw: string): ActiveMascot {
   }
 }
 
+/** Default on when key missing or invalid. */
+export function parseMascotSoundsFromConfigJson(raw: string): boolean {
+  try {
+    const j = JSON.parse(raw) as { mascot?: { sounds?: boolean } };
+    return j.mascot?.sounds !== false;
+  } catch {
+    return true;
+  }
+}
+
 interface WalleStore {
   mode: "auto" | "manual_review";
   emotion: Emotion;

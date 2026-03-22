@@ -10,7 +10,11 @@ import { useLearning } from "./hooks/useLearning";
 import type { Animation } from "./lib/animation";
 import { normalizeAnimation } from "./lib/animation";
 import { EMOTIONS, type Emotion } from "./lib/emotion";
-import { parseActiveMascotFromConfigJson, useWalleStore } from "./store/walleStore";
+import {
+  parseActiveMascotFromConfigJson,
+  parseMascotSoundsFromConfigJson,
+  useWalleStore,
+} from "./store/walleStore";
 import "./styles/globals.css";
 import "./styles/animations.css";
 
@@ -21,29 +25,32 @@ function MascotRoot() {
   const learningDismissSeconds = 30;
   const { pendingSuggestion, accept, dismiss } = useLearning(learningDismissSeconds);
   const patternEmotionLock = useRef(false);
+  const [soundsEnabled, setSoundsEnabled] = useState(true);
 
-  const hydrateActiveMascot = useCallback(async () => {
+  const hydrateMascotConfig = useCallback(async () => {
     try {
       const raw = await invoke<string>("get_walle_config");
       useWalleStore.setState({ activeMascot: parseActiveMascotFromConfigJson(raw) });
+      setSoundsEnabled(parseMascotSoundsFromConfigJson(raw));
     } catch {
       useWalleStore.setState({ activeMascot: "walle" });
+      setSoundsEnabled(true);
     }
   }, []);
 
   useEffect(() => {
-    void hydrateActiveMascot();
-  }, [hydrateActiveMascot]);
+    void hydrateMascotConfig();
+  }, [hydrateMascotConfig]);
 
   useEffect(() => {
     let u: (() => void) | undefined;
     (async () => {
       u = await listen("walle/config-changed", () => {
-        void hydrateActiveMascot();
+        void hydrateMascotConfig();
       });
     })().catch(console.error);
     return () => u?.();
-  }, [hydrateActiveMascot]);
+  }, [hydrateMascotConfig]);
 
   useEffect(() => {
     let unlistenEmotion: (() => void) | undefined;
@@ -136,6 +143,7 @@ function MascotRoot() {
         <EmotionEngine
           emotion={emotion}
           animation={animation}
+          soundsEnabled={soundsEnabled}
           onAnimationComplete={onAnimationComplete}
           onPet={handlePet}
         />

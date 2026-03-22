@@ -9,8 +9,8 @@ import WalleMascot from "./WalleMascot";
 
 const MascotRenderer = forwardRef<
   HTMLDivElement,
-  { emotion: Emotion; animation: Animation; onPet: () => void }
->(function MascotRenderer({ emotion, animation, onPet }, ref) {
+  { emotion: Emotion; animation: Animation; soundsEnabled: boolean; onPet: () => void }
+>(function MascotRenderer({ emotion, animation, soundsEnabled, onPet }, ref) {
   const activeMascot = useWalleStore((s) => s.activeMascot);
   const rootRef = useRef<HTMLDivElement | null>(null);
 
@@ -29,9 +29,25 @@ const MascotRenderer = forwardRef<
   useMascotHover(rootRef, animation, emotion, activeMascot);
 
   if (activeMascot === "dudu") {
-    return <DuDuMascot ref={setRef} emotion={emotion} animation={animation} onPet={onPet} />;
+    return (
+      <DuDuMascot
+        ref={setRef}
+        emotion={emotion}
+        animation={animation}
+        soundsEnabled={soundsEnabled}
+        onPet={onPet}
+      />
+    );
   }
-  return <WalleMascot ref={setRef} emotion={emotion} animation={animation} onPet={onPet} />;
+  return (
+    <WalleMascot
+      ref={setRef}
+      emotion={emotion}
+      animation={animation}
+      soundsEnabled={soundsEnabled}
+      onPet={onPet}
+    />
+  );
 });
 
 export default MascotRenderer;

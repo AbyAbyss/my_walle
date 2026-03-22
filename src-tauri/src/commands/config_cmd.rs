@@ -125,6 +125,8 @@ pub struct SaveUiPreferencesPayload {
     pub idle_wander: Option<bool>,
     #[serde(default)]
     pub show_work: Option<bool>,
+    #[serde(default)]
+    pub mascot_sounds: Option<bool>,
 }
 
 #[tauri::command]
@@ -147,6 +149,12 @@ pub fn save_ui_preferences(app: AppHandle, prefs: SaveUiPreferencesPayload) -> R
     }
     if let Some(x) = prefs.show_work {
         v["show_work"] = json!(x);
+    }
+    if let Some(x) = prefs.mascot_sounds {
+        if !v["mascot"].is_object() {
+            v["mascot"] = json!({});
+        }
+        v["mascot"]["sounds"] = json!(x);
     }
     config::write_config_json(&app, &v)
 }
