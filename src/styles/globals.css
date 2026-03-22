@@ -321,3 +321,322 @@ body,
 .head-grp {
   transition: transform 0.1s ease-out;
 }
+
+/* ─── DuDu bird — base emotions (mascot_test/walle_mascot_bird.html) ─── */
+@keyframes duduIdleBob {
+  0%,
+  100% {
+    transform: translateY(0) rotate(0);
+  }
+  50% {
+    transform: translateY(-7px) rotate(1deg);
+  }
+}
+
+@keyframes duduWingIdle {
+  0%,
+  100% {
+    transform: rotate(0);
+  }
+  50% {
+    transform: rotate(2.5deg);
+  }
+}
+
+@keyframes duduTailSway {
+  0%,
+  100% {
+    transform: rotate(0);
+  }
+  50% {
+    transform: rotate(-4deg);
+  }
+}
+
+@keyframes duduThinkTilt {
+  0%,
+  100% {
+    transform: rotate(0);
+  }
+  50% {
+    transform: rotate(-10deg);
+  }
+}
+
+@keyframes duduHappyJump {
+  0% {
+    transform: translateY(0) rotate(0);
+  }
+  18% {
+    transform: translateY(-26px) rotate(-5deg) scaleX(0.93) scaleY(1.07);
+  }
+  36% {
+    transform: translateY(-17px) rotate(5deg);
+  }
+  54% {
+    transform: translateY(-23px) rotate(-3deg);
+  }
+  72% {
+    transform: translateY(-8px) rotate(2deg);
+  }
+  88% {
+    transform: translateY(-2px);
+  }
+  100% {
+    transform: translateY(0) rotate(0);
+  }
+}
+
+@keyframes duduWingFlap {
+  0%,
+  100% {
+    transform: rotate(0);
+  }
+  25% {
+    transform: rotate(-30deg);
+  }
+  75% {
+    transform: rotate(14deg);
+  }
+}
+
+@keyframes duduWingFlapR {
+  0%,
+  100% {
+    transform: rotate(0);
+  }
+  25% {
+    transform: rotate(30deg);
+  }
+  75% {
+    transform: rotate(-14deg);
+  }
+}
+
+@keyframes duduSadDroop {
+  to {
+    transform: translateY(8px) rotate(-3deg);
+  }
+}
+
+@keyframes duduSadTail {
+  to {
+    transform: rotate(-14deg);
+  }
+}
+
+@keyframes duduAlertShake {
+  0%,
+  100% {
+    transform: translateX(0) rotate(0);
+  }
+  15% {
+    transform: translateX(-7px) rotate(-4deg);
+  }
+  30% {
+    transform: translateX(7px) rotate(4deg);
+  }
+  45% {
+    transform: translateX(-5px) rotate(-2deg);
+  }
+  60% {
+    transform: translateX(5px) rotate(2deg);
+  }
+  75% {
+    transform: translateX(-2px);
+  }
+  85% {
+    transform: translateX(2px);
+  }
+}
+
+@keyframes duduFocusMicro {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-2px);
+  }
+}
+
+@keyframes duduSleepRock {
+  0%,
+  100% {
+    transform: translateY(0) rotate(-2deg);
+  }
+  50% {
+    transform: translateY(-2px) rotate(2deg);
+  }
+}
+
+@keyframes duduZFloat {
+  0% {
+    opacity: 0;
+    transform: translate(0, 0) scale(0.5);
+  }
+  25% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(20px, -46px) scale(1.5);
+  }
+}
+
+@keyframes duduZFloat2 {
+  0% {
+    opacity: 0;
+    transform: translate(0, 0) scale(0.4);
+  }
+  25% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(32px, -64px) scale(1.8);
+  }
+}
+
+#dudu.idle .whole {
+  animation: duduIdleBob 3s ease-in-out infinite;
+}
+
+#dudu.idle .wing-l {
+  animation: duduWingIdle 3s ease-in-out infinite;
+  transform-origin: 110px 148px;
+}
+
+#dudu.idle .wing-r {
+  animation: duduWingIdle 3s ease-in-out infinite reverse;
+  transform-origin: 110px 148px;
+}
+
+#dudu.idle .tail {
+  animation: duduTailSway 3s ease-in-out infinite;
+  transform-origin: 110px 220px;
+}
+
+#dudu.thinking .whole {
+  animation: duduThinkTilt 1.8s ease-in-out infinite;
+  transform-origin: 110px 140px;
+}
+
+#dudu.happy .whole {
+  animation: duduHappyJump 0.8s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+#dudu.happy .wing-l {
+  animation: duduWingFlap 0.38s ease-in-out infinite;
+  transform-origin: 82px 148px;
+}
+
+#dudu.happy .wing-r {
+  animation: duduWingFlapR 0.38s ease-in-out infinite;
+  transform-origin: 138px 148px;
+}
+
+#dudu.sad .whole {
+  animation: duduSadDroop 0.6s ease forwards;
+}
+
+#dudu.sad .tail {
+  animation: duduSadTail 0.6s ease forwards;
+  transform-origin: 110px 220px;
+}
+
+#dudu.alert .whole {
+  animation: duduAlertShake 0.5s ease-in-out infinite;
+}
+
+#dudu.focused .whole {
+  animation: duduFocusMicro 4s ease-in-out infinite;
+}
+
+#dudu.sleeping .whole {
+  animation: duduSleepRock 4s ease-in-out infinite;
+}
+
+#dudu #zzz-a {
+  animation: duduZFloat 2.4s ease-out 0s infinite;
+}
+
+#dudu #zzz-b {
+  animation: duduZFloat2 2.4s ease-out 0.9s infinite;
+}
+
+#dudu #beak-lower {
+  transform-origin: 110px 126px;
+  transition: transform 0.06s ease-out;
+}
+
+#dudu #beak-upper {
+  transform-origin: 110px 122px;
+  transition: transform 0.06s ease-out;
+}
+
+#dudu #crest-l {
+  transform-origin: 104px 62px;
+  transition: transform 0.18s ease-out;
+}
+
+#dudu #crest-c {
+  transform-origin: 110px 58px;
+  transition: transform 0.18s ease-out;
+}
+
+#dudu #crest-r {
+  transform-origin: 116px 62px;
+  transition: transform 0.18s ease-out;
+}
+
+#dudu #body-puff {
+  transform-origin: 110px 185px;
+  transition: transform 0.25s ease-out;
+}
+
+#dudu #tongue {
+  transform-origin: 110px 130px;
+  transition: transform 0.06s ease-out;
+}
+
+#dudu .dudu-bubble {
+  position: absolute;
+  top: -58px;
+  right: -88px;
+  background: rgba(8, 10, 18, 0.97);
+  border: 1.5px solid var(--walle-cyan);
+  border-radius: 20px 20px 20px 4px;
+  padding: 9px 16px;
+  font-size: 12px;
+  font-weight: 700;
+  font-family: Nunito, sans-serif;
+  color: var(--walle-cyan);
+  white-space: nowrap;
+  opacity: 0;
+  transform: scale(0.75) translateY(8px);
+  transform-origin: bottom left;
+  transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  pointer-events: none;
+  box-shadow: 0 0 18px rgba(0, 212, 255, 0.45);
+  z-index: 10;
+}
+
+#dudu .dudu-bubble.show {
+  opacity: 1;
+  transform: scale(1) translateY(0);
+}
+
+#dudu .dudu-bubble::after {
+  content: "";
+  position: absolute;
+  bottom: -8px;
+  left: 14px;
+  width: 12px;
+  height: 12px;
+  background: rgba(8, 10, 18, 0.97);
+  border-right: 1.5px solid var(--walle-cyan);
+  border-bottom: 1.5px solid var(--walle-cyan);
+  clip-path: polygon(100% 0, 100% 100%, 0 100%);
+  transform: rotate(45deg);
+}

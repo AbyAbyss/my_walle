@@ -45,6 +45,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::get_walle_config,
             commands::save_mascot_position,
+            commands::save_mascot_choice,
             commands::has_api_key,
             commands::has_provider_api_key,
             commands::save_api_key,

@@ -1,3 +1,4 @@
+import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import ReactDOM from "react-dom/client";
@@ -6,6 +7,7 @@ import MascotWindow from "./windows/MascotWindow";
 import type { Animation } from "./lib/animation";
 import { normalizeAnimation } from "./lib/animation";
 import { EMOTIONS, type Emotion } from "./lib/emotion";
+import { parseActiveMascotFromConfigJson, useWalleStore } from "./store/walleStore";
 import "./styles/globals.css";
 import "./styles/animations.css";
 
@@ -13,6 +15,29 @@ function MascotRoot() {
   const [emotion, setEmotion] = useState<Emotion>("idle");
   const [animation, setAnimation] = useState<Animation>("none");
   const prevEmotionRef = useRef<Emotion>("idle");
+
+  const hydrateActiveMascot = useCallback(async () => {
+    try {
+      const raw = await invoke<string>("get_walle_config");
+      useWalleStore.setState({ activeMascot: parseActiveMascotFromConfigJson(raw) });
+    } catch {
+      useWalleStore.setState({ activeMascot: "walle" });
+    }
+  }, []);
+
+  useEffect(() => {
+    void hydrateActiveMascot();
+  }, [hydrateActiveMascot]);
+
+  useEffect(() => {
+    let u: (() => void) | undefined;
+    (async () => {
+      u = await listen("walle/config-changed", () => {
+        void hydrateActiveMascot();
+      });
+    })().catch(console.error);
+    return () => u?.();
+  }, [hydrateActiveMascot]);
 
   useEffect(() => {
     let unlistenEmotion: (() => void) | undefined;

@@ -24,6 +24,7 @@
   },
   "workflows": [],
   "mascot": {
+    "active": "walle",
     "position": "bottom-right",
     "scale": 1.0,
     "idle_animation": true,

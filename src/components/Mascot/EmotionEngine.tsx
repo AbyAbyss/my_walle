@@ -1,10 +1,9 @@
 import { useCallback, useEffect, useRef } from "react";
 
-import { useWalleHover } from "../../hooks/useWalleHover";
 import type { Animation } from "../../lib/animation";
 import { ANIMATION_DURATION_MS } from "../../lib/animation";
 import type { Emotion } from "../../lib/emotion";
-import WalleMascot from "./WalleMascot";
+import MascotRenderer from "./MascotRenderer";
 
 function useAnimationController(animation: Animation, onComplete: () => void) {
   useEffect(() => {
@@ -36,10 +35,9 @@ export default function EmotionEngine({
   }, [onAnimationComplete]);
 
   useAnimationController(animation, stableComplete);
-  useWalleHover(mascotRef, animation, emotion);
 
   return (
-    <WalleMascot
+    <MascotRenderer
       ref={mascotRef}
       emotion={emotion}
       animation={animation}

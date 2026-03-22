@@ -1,8 +1,10 @@
+import { invoke } from "@tauri-apps/api/core";
 import { create } from "zustand";
 
 import type { Animation } from "../lib/animation";
 import type { Emotion } from "../lib/emotion";
 import { emitMascotAnimation } from "../lib/mascotBridge";
+import { notifyConfigChanged } from "../lib/settingsCrossWindow";
 import type { WalleAction } from "../lib/actionParser";
 import type { Memory } from "../lib/memory";
 
@@ -61,6 +63,17 @@ export interface GitContext {
   repoPath: string | null;
 }
 
+export type ActiveMascot = "walle" | "dudu";
+
+export function parseActiveMascotFromConfigJson(raw: string): ActiveMascot {
+  try {
+    const j = JSON.parse(raw) as { mascot?: { active?: string } };
+    return j.mascot?.active === "dudu" ? "dudu" : "walle";
+  } catch {
+    return "walle";
+  }
+}
+
 interface WalleStore {
   mode: "auto" | "manual_review";
   emotion: Emotion;
@@ -81,6 +94,8 @@ interface WalleStore {
   clipboardPreview: string | null;
   showWorkEnabled: boolean;
   gitContext: GitContext | null;
+  activeMascot: ActiveMascot;
+  setActiveMascot: (mascot: ActiveMascot) => void;
   addWorkStep: (step: Omit<WorkStep, "id" | "at"> & { id?: string }) => void;
   clearWorkSteps: () => void;
   addMemory: (m: Memory) => void;
@@ -129,6 +144,7 @@ export const useWalleStore = create<WalleStore>((set, get) => ({
   clipboardPreview: null,
   showWorkEnabled: false,
   gitContext: null,
+  activeMascot: "walle",
   addWorkStep: (step) =>
     set((s) => ({
       workSteps: [
@@ -208,5 +224,16 @@ export const useWalleStore = create<WalleStore>((set, get) => ({
   setLastUsage: (lastUsage) => set({ lastUsage }),
   playAnimation: (animation) => {
     void emitMascotAnimation(animation);
+  },
+  setActiveMascot: (mascot) => {
+    set({ activeMascot: mascot });
+    void (async () => {
+      try {
+        await invoke("save_mascot_choice", { mascot });
+        await notifyConfigChanged();
+      } catch (e) {
+        console.error(e);
+      }
+    })();
   },
 }));

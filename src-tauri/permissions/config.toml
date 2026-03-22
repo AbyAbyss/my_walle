@@ -9,6 +9,11 @@ description = "Allows persisting mascot window position to walle.config.json."
 commands.allow = ["save_mascot_position"]
 
 [[permission]]
+identifier = "allow-save-mascot-choice"
+description = "Allows persisting active mascot (walle/dudu) to walle.config.json."
+commands.allow = ["save_mascot_choice"]
+
+[[permission]]
 identifier = "allow-save-workflow-to-config"
 description = "Allows persisting workflows to walle.config.json."
 commands.allow = ["save_workflow_to_config"]

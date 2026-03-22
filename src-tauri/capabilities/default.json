@@ -19,6 +19,7 @@
     "global-shortcut:default",
     "allow-get-walle-config",
     "allow-save-mascot-position",
+    "allow-save-mascot-choice",
     "allow-has-api-key",
     "allow-has-provider-api-key",
     "allow-save-api-key",

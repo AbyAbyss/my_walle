@@ -15,6 +15,21 @@ pub fn save_mascot_position(app: AppHandle, x: f64, y: f64) -> Result<(), String
 }
 
 #[tauri::command]
+pub fn save_mascot_choice(app: AppHandle, mascot: String) -> Result<(), String> {
+    let normalized = if mascot == "dudu" {
+        "dudu"
+    } else {
+        "walle"
+    };
+    let mut v = config::read_config_json(&app)?;
+    if !v["mascot"].is_object() {
+        v["mascot"] = json!({});
+    }
+    v["mascot"]["active"] = json!(normalized);
+    config::write_config_json(&app, &v)
+}
+
+#[tauri::command]
 pub fn save_agent_mode(app: AppHandle, mode: String) -> Result<(), String> {
     let mut v = config::read_config_json(&app)?;
     if !v["agent"].is_object() {

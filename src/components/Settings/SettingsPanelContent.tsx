@@ -12,7 +12,12 @@ import {
   saveUiPreferences,
   type UserLevel,
 } from "../../lib/uiPreferences";
-import type { Schedule, Workflow } from "../../store/walleStore";
+import {
+  parseActiveMascotFromConfigJson,
+  type Schedule,
+  type Workflow,
+  useWalleStore,
+} from "../../store/walleStore";
 import PluginManager from "./PluginManager";
 import WorkflowEditor from "./WorkflowEditor";
 import { InlineConfirmDialog } from "./InlineConfirmDialog";
@@ -21,7 +26,7 @@ interface SettingsPanelContentProps {
   onClose: () => void;
 }
 
-type SettingsTab = "general" | "plugins" | "workflows";
+type SettingsTab = "general" | "appearance" | "plugins" | "workflows";
 
 const CLIPBOARD_PROMPT_KEY = "walle_clipboard_prompt_seen";
 
@@ -46,6 +51,7 @@ interface SettingsConfig {
   plugins?: { enabled?: string[] };
   developer_mode?: { enabled?: boolean };
   workflows?: WorkflowConfigItem[];
+  mascot?: { active?: string };
 }
 
 type ProviderName = "anthropic" | "openai" | "ollama" | "openrouter";
@@ -197,7 +203,110 @@ function ToggleTile({
   );
 }
 
+function MascotFacePreviewWalle() {
+  return (
+    <svg width={70} height={70} viewBox="0 0 48 48" aria-hidden>
+      <rect x="8" y="14" width="32" height="28" rx="8" fill="#1c2038" stroke="#22253e" strokeWidth="1.2" />
+      <circle cx="18" cy="26" r="5" fill="#ffb347" />
+      <circle cx="30" cy="26" r="5" fill="#ffb347" />
+      <circle cx="18" cy="26" r="2" fill="#0d0800" />
+      <circle cx="30" cy="26" r="2" fill="#0d0800" />
+      <rect x="20" y="36" width="8" height="2" rx="1" fill="#00d4ff" opacity="0.5" />
+    </svg>
+  );
+}
+
+function MascotFacePreviewDuDu() {
+  return (
+    <svg width={70} height={70} viewBox="0 0 48 48" aria-hidden>
+      <circle cx="24" cy="26" r="20" fill="#3db84a" />
+      <ellipse cx="24" cy="18" rx="14" ry="10" fill="#1a3020" opacity="0.7" />
+      <circle cx="17" cy="24" r="7" fill="white" opacity="0.92" />
+      <circle cx="31" cy="24" r="7" fill="white" opacity="0.92" />
+      <circle cx="17" cy="24" r="3" fill="#3a2800" />
+      <circle cx="31" cy="24" r="3" fill="#3a2800" />
+      <ellipse cx="11" cy="28" rx="4" ry="3" fill="#3db84a" opacity="0.85" />
+      <ellipse cx="37" cy="28" rx="4" ry="3" fill="#3db84a" opacity="0.85" />
+      <path
+        d="M20 33 Q24 36 28 33"
+        fill="none"
+        stroke="#c8c4a0"
+        strokeWidth="1.4"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+function MascotPickerCard({
+  name,
+  description,
+  personality,
+  isActive,
+  onSelect,
+  preview,
+}: {
+  name: string;
+  description: string;
+  personality: string;
+  isActive: boolean;
+  onSelect: () => void;
+  preview: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      className="flex flex-col items-center gap-2.5 text-left"
+      style={{
+        flex: 1,
+        minWidth: 0,
+        border: isActive ? "1.5px solid var(--walle-cyan)" : "1px solid var(--walle-glass-border)",
+        borderRadius: "var(--walle-radius-lg)",
+        background: isActive ? "var(--walle-cyan-dim)" : "var(--walle-bg-2)",
+        padding: "16px",
+        cursor: "pointer",
+        transition: "var(--walle-transition)",
+      }}
+    >
+      <div className="flex items-center justify-center" style={{ height: 80 }}>
+        {preview}
+      </div>
+      <div className="flex items-center gap-1.5">
+        <span className="text-[13px] font-bold" style={{ color: "var(--walle-text-primary)" }}>
+          {name}
+        </span>
+        {isActive && (
+          <span
+            className="text-[9px] font-bold uppercase"
+            style={{
+              padding: "2px 6px",
+              borderRadius: 999,
+              background: "var(--walle-cyan-dim)",
+              color: "var(--walle-cyan)",
+              border: "1px solid var(--walle-cyan)",
+            }}
+          >
+            Active
+          </span>
+        )}
+      </div>
+      <p className="text-[11px] text-center m-0" style={{ color: "var(--walle-text-secondary)" }}>
+        {description}
+      </p>
+      <p
+        className="text-[10px] text-center m-0 italic"
+        style={{ color: "var(--walle-text-muted)" }}
+      >
+        &ldquo;{personality}&rdquo;
+      </p>
+    </button>
+  );
+}
+
 export function SettingsPanelContent({ onClose }: SettingsPanelContentProps) {
+  const activeMascot = useWalleStore((s) => s.activeMascot);
+  const setActiveMascot = useWalleStore((s) => s.setActiveMascot);
   const [tab, setTab] = useState<SettingsTab>("general");
   const [enabledPlugins, setEnabledPlugins] = useState<string[]>([
     "shell",
@@ -245,6 +354,7 @@ export function SettingsPanelContent({ onClose }: SettingsPanelContentProps) {
       try {
         const raw = await invoke<string>("get_walle_config");
         const parsed = JSON.parse(raw) as SettingsConfig;
+        useWalleStore.setState({ activeMascot: parseActiveMascotFromConfigJson(raw) });
         const llm = parsed.llm ?? {};
         const nextProvider = toProviderName(llm.provider);
         setProvider(nextProvider);
@@ -428,6 +538,7 @@ export function SettingsPanelContent({ onClose }: SettingsPanelContentProps) {
           {(
             [
               { id: "general" as const, label: "General" },
+              { id: "appearance" as const, label: "Appearance" },
               { id: "plugins" as const, label: "Plugins" },
               { id: "workflows" as const, label: "Workflows" },
             ] as const
@@ -450,6 +561,51 @@ export function SettingsPanelContent({ onClose }: SettingsPanelContentProps) {
             </button>
           ))}
         </div>
+
+        {tab === "appearance" && (
+          <section style={{ ...sectionStyle, marginBottom: 16 }}>
+            <SectionHeader
+              eyebrow="Mascot"
+              title="Choose your companion"
+              body="Switch instantly — no restart. The mascot window updates as soon as you pick."
+            />
+            <div
+              className="flex flex-wrap gap-3"
+              style={{ alignItems: "stretch" }}
+            >
+              <MascotPickerCard
+                name="WALLE"
+                description="Boxy robot — warm, curious, efficient"
+                personality="Concise, helpful, slightly witty"
+                isActive={activeMascot === "walle"}
+                onSelect={() => {
+                  if (activeMascot === "walle") return;
+                  setActiveMascot("walle");
+                  setStatus("Switched to WALLE.");
+                }}
+                preview={<MascotFacePreviewWalle />}
+              />
+              <MascotPickerCard
+                name="DuDu"
+                description="Green-cheeked conure — chirpy, playful"
+                personality="Excitable, birdy, loves a good squawk"
+                isActive={activeMascot === "dudu"}
+                onSelect={() => {
+                  if (activeMascot === "dudu") return;
+                  setActiveMascot("dudu");
+                  setStatus("Switched to DuDu.");
+                }}
+                preview={<MascotFacePreviewDuDu />}
+              />
+            </div>
+            <p className="text-[12px] mt-3 m-0" style={{ color: "var(--walle-text-secondary)" }}>
+              Active:{" "}
+              <span style={{ color: "var(--walle-cyan)", fontWeight: 600 }}>
+                {activeMascot === "dudu" ? "DuDu" : "WALLE"}
+              </span>
+            </p>
+          </section>
+        )}
 
         {tab === "plugins" && (
           <PluginManager
