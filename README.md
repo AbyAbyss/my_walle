@@ -10,6 +10,7 @@
   <img alt="Rust" src="https://img.shields.io/badge/Rust-stable-CE422B?logo=rust&logoColor=white">
   <img alt="React 19" src="https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black">
   <img alt="Windows and macOS" src="https://img.shields.io/badge/Windows%20%C2%B7%20macOS-desktop-3a3f4b">
+  <img alt="MIT license" src="https://img.shields.io/badge/license-MIT-4ade99">
 </p>
 
 <p align="center">
@@ -128,4 +129,4 @@ src-tauri/src/memory/                 SQLite memory store
 
 ## License
 
-No license has been chosen yet.
+[MIT](LICENSE)
