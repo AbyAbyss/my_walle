@@ -61,11 +61,13 @@ Each has **7 emotions** (idle, thinking, happy, sad, alert, focused, sleeping) a
 
 **AI providers:** Anthropic, OpenAI, OpenRouter, or a local model through Ollama. API keys are kept in the OS credential store (via the `keyring` crate), never in the config file.
 
-## Run it
+## Build from source
 
 **You need:** Windows 10/11 or macOS 11+, [Rust](https://rustup.rs/) stable, and Node.js 20+. On Linux, chat, shell commands and workflows work, but launching apps isn't wired up.
 
 ```bash
+git clone https://github.com/AbyAbyss/my_walle.git
+cd my_walle
 npm install
 npm run tauri dev    # Vite + Tauri in development
 npm run tauri build  # Desktop bundle (.msi on Windows, .dmg on macOS)
@@ -81,6 +83,18 @@ npm run tauri build -- --target x86_64-apple-darwin    # Intel
 If `tauri build` fails with a `--ci` flag error, try `CI= npm run tauri build` (Git Bash) or unset `CI`.
 
 **First run:** a setup window asks for your provider's API key. To change it later, open the chat and click the gear.
+
+## First launch
+
+There are no prebuilt installers yet, and an app you build on your own machine opens normally. If you copy a build to another computer, it is not code-signed (free side project), so the OS will ask you to confirm the first time.
+
+**macOS** says it can't verify walle. Open **System Settings → Privacy & Security** and click **Open Anyway**, or run in Terminal:
+
+```sh
+xattr -dr com.apple.quarantine "/Applications/walle.app"
+```
+
+**Windows** shows a SmartScreen prompt. Choose **More info → Run anyway**.
 
 ## Hotkeys
 
